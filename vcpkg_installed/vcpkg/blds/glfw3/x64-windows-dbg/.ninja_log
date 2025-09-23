@@ -1,0 +1,26 @@
+# ninja log v6
+7	205	7798100119473759	src/CMakeFiles/glfw.dir/context.c.obj	575005a2a6f14d7a
+12	212	7798100119630335	src/CMakeFiles/glfw.dir/init.c.obj	886affeba385664c
+16	218	7798100119630335	src/CMakeFiles/glfw.dir/input.c.obj	16929aa744b0c854
+25	273	7798100119789147	src/CMakeFiles/glfw.dir/platform.c.obj	fb062209c2f854f0
+20	280	7798100119630335	src/CMakeFiles/glfw.dir/monitor.c.obj	de65c061ebcd2bc0
+29	285	7798100119844879	src/CMakeFiles/glfw.dir/vulkan.c.obj	4672107f232cc4fb
+34	399	7798100119884967	src/CMakeFiles/glfw.dir/window.c.obj	874dc17f5ceb06fc
+212	405	7798100121567760	src/CMakeFiles/glfw.dir/osmesa_context.c.obj	704cc3cb925b078
+206	458	7798100121567760	src/CMakeFiles/glfw.dir/egl_context.c.obj	a106e7ad1b05be3
+219	464	7798100121732277	src/CMakeFiles/glfw.dir/null_init.c.obj	ab2531e3e7e317a5
+274	470	7798100122257673	src/CMakeFiles/glfw.dir/null_monitor.c.obj	bc6173bb85ca00e8
+280	558	7798100122314204	src/CMakeFiles/glfw.dir/null_window.c.obj	aa6883067784cea4
+285	563	7798100122357670	src/CMakeFiles/glfw.dir/null_joystick.c.obj	8e706b13e0b8978
+406	620	7798100123598814	src/CMakeFiles/glfw.dir/win32_time.c.obj	2aa147a5b8cce57e
+399	627	7798100123541284	src/CMakeFiles/glfw.dir/win32_module.c.obj	f1c2e97d4d4d84ef
+458	733	7798100124110931	src/CMakeFiles/glfw.dir/win32_thread.c.obj	a3868dc3e01e18a
+464	736	7798100124110931	src/CMakeFiles/glfw.dir/win32_init.c.obj	44fede916ab6bec3
+471	774	7798100124207332	src/CMakeFiles/glfw.dir/win32_joystick.c.obj	ac40b62a0630fd1e
+627	789	7798100125785486	src/CMakeFiles/glfw.dir/glfw.rc.res	e8b6b50e4908927f
+620	820	7798100125724494	src/CMakeFiles/glfw.dir/wgl_context.c.obj	4d41279168c4b6e2
+564	827	7798100125150750	src/CMakeFiles/glfw.dir/win32_window.c.obj	e41b75c3184befd6
+558	842	7798100125094581	src/CMakeFiles/glfw.dir/win32_monitor.c.obj	53e6f2ff02374c8b
+842	1046	7798100129727803	src/glfw3.dll	2fd487560bb4c2ef
+842	1046	7798100129727803	src/glfw3dll.lib	2fd487560bb4c2ef
+1046	1145	7798100129884410	CMakeFiles/install.util	f8eb591dc3c609b3

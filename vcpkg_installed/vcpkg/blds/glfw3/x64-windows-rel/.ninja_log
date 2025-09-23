@@ -1,0 +1,26 @@
+# ninja log v6
+31	286	7798100131511297	src/CMakeFiles/glfw.dir/vulkan.c.obj	6a4a25a75de3d38a
+6	294	7798100131150132	src/CMakeFiles/glfw.dir/context.c.obj	650ed34af7ff67dc
+11	301	7798100131306678	src/CMakeFiles/glfw.dir/init.c.obj	a675ea6058e7f27e
+19	307	7798100131306678	src/CMakeFiles/glfw.dir/monitor.c.obj	4818e225a92a57f2
+26	313	7798100131483670	src/CMakeFiles/glfw.dir/platform.c.obj	de9b33046be6df4a
+15	335	7798100131306678	src/CMakeFiles/glfw.dir/input.c.obj	14720d56e50c67f0
+37	354	7798100131597426	src/CMakeFiles/glfw.dir/window.c.obj	364c54e55080a523
+307	538	7798100134301064	src/CMakeFiles/glfw.dir/null_monitor.c.obj	462f2c089c6c70a6
+301	554	7798100134243542	src/CMakeFiles/glfw.dir/null_init.c.obj	66d0f06876945faf
+294	561	7798100134163389	src/CMakeFiles/glfw.dir/osmesa_context.c.obj	160733bfebea811c
+336	566	7798100134599037	src/CMakeFiles/glfw.dir/null_joystick.c.obj	3dc1d7f04e7ec61a
+287	572	7798100134105849	src/CMakeFiles/glfw.dir/egl_context.c.obj	2eaf518be230fcf8
+313	579	7798100134361182	src/CMakeFiles/glfw.dir/null_window.c.obj	afee369b6f84f392
+354	776	7798100134773995	src/CMakeFiles/glfw.dir/win32_module.c.obj	9d3ce98e442e399d
+538	782	7798100136611248	src/CMakeFiles/glfw.dir/win32_time.c.obj	c55d5328530bf28b
+566	787	7798100136892922	src/CMakeFiles/glfw.dir/win32_joystick.c.obj	38c5e5e8b4c581e7
+555	789	7798100136789016	src/CMakeFiles/glfw.dir/win32_thread.c.obj	3f961b88718f4e92
+561	790	7798100136846546	src/CMakeFiles/glfw.dir/win32_init.c.obj	e37fe8e627c20697
+782	843	7798100139021883	src/CMakeFiles/glfw.dir/glfw.rc.res	d4a108f05cb7175c
+572	864	7798100136953046	src/CMakeFiles/glfw.dir/win32_monitor.c.obj	b2c26165ec4f9508
+580	943	7798100137023197	src/CMakeFiles/glfw.dir/win32_window.c.obj	89d9b5047f2f7d7a
+776	951	7798100138965200	src/CMakeFiles/glfw.dir/wgl_context.c.obj	f83b21b697ebd75f
+951	1040	7798100141391704	src/glfw3.dll	ad18d29e0386250d
+951	1040	7798100141391704	src/glfw3dll.lib	ad18d29e0386250d
+1040	1123	7798100141634509	CMakeFiles/install.util	b1c90594287f819c

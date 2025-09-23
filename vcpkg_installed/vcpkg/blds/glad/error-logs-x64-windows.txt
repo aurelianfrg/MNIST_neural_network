@@ -1,0 +1,3 @@
+C:\Users\aurel\source\repos\tests_opengl\vcpkg_installed\vcpkg\blds\glad\config-x64-windows-dbg-CMakeCache.txt.log
+C:\Users\aurel\source\repos\tests_opengl\vcpkg_installed\vcpkg\blds\glad\config-x64-windows-rel-CMakeCache.txt.log
+C:\Users\aurel\source\repos\tests_opengl\vcpkg_installed\vcpkg\blds\glad\config-x64-windows-out.log

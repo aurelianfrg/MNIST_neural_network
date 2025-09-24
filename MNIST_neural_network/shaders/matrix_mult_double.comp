@@ -1,0 +1,33 @@
+#version 430 core
+#extension GL_EXT_shader_atomic_int64 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout(local_size_x = 1) in;
+
+const uint height_left = %HL%;
+const uint width_right = %WR%;
+const uint common_length = %CL%;
+
+layout(std430, binding = 0) buffer Input1 {
+    double mat_1[height_left][common_length];
+};
+
+layout(std430, binding = 1) buffer Input2 {
+    double mat_2[common_length][width_right];
+};
+
+layout(std430, binding = 2) buffer Output {
+    double mat_out[height_left][width_right];
+};
+
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint idy = gl_GlobalInvocationID.y;
+
+    double sum = 0.0;
+    for (int i = 0; i < common_length; ++i){
+        sum += mat_1[idx][i] * mat_2[i][idy];
+    }
+    mat_out[idx][idy] = sum;
+}

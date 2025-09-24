@@ -13,6 +13,7 @@ find_package(OpenGL REQUIRED)
 
 add_executable(${NAME}
     "${NAME}.cpp"
+    "gpu_matrix_op.cpp"
 )
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
@@ -27,3 +28,4 @@ target_link_libraries(${NAME} PRIVATE
 )
 
 file(COPY ${CMAKE_SOURCE_DIR}/${NAME}/shaders DESTINATION ${CMAKE_BINARY_DIR}/${NAME})
+file(COPY ${CMAKE_SOURCE_DIR}/${NAME}/mnist DESTINATION ${CMAKE_BINARY_DIR}/${NAME})

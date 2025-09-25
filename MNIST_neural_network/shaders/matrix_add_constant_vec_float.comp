@@ -5,23 +5,23 @@
 layout(local_size_x = 1) in;
 
 const uint height = %H%;
-const uint width= %W%;
+const uint width = %W%;
 
 layout(std430, binding = 0) buffer Input1 {
-    double mat_1[height][width];
+    float mat_1[height][width];
 };
 
 layout(std430, binding = 1) buffer Input2 {
-    double mat_2[height][width];
+    float mat_2[height];
 };
 
 layout(std430, binding = 2) buffer Output {
-    double mat_out[height][width];
+    float mat_out[height][width];
 };
 
-
+// simply add a constant vector to each column of the matrix
 void main() {
     uint idx = gl_GlobalInvocationID.x;
     uint idy = gl_GlobalInvocationID.y;
-    mat_out[idx][idy] = mat_1[idx][idy] + mat_2[idx][idy];
+    mat_out[idx][idy] = mat_1[idx][idy] + mat_2[idx];
 }

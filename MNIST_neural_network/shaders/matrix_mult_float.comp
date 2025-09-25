@@ -4,24 +4,30 @@
 
 layout(local_size_x = 1) in;
 
-const uint height = %H%;
-const uint width= %W%;
+const uint height_left = %HL%;
+const uint width_right = %WR%;
+const uint common_length = %CL%;
 
 layout(std430, binding = 0) buffer Input1 {
-    double mat_1[height][width];
+    float mat_1[height_left][common_length];
 };
 
 layout(std430, binding = 1) buffer Input2 {
-    double mat_2[height][width];
+    float mat_2[common_length][width_right];
 };
 
 layout(std430, binding = 2) buffer Output {
-    double mat_out[height][width];
+    float mat_out[height_left][width_right];
 };
 
 
 void main() {
     uint idx = gl_GlobalInvocationID.x;
     uint idy = gl_GlobalInvocationID.y;
-    mat_out[idx][idy] = mat_1[idx][idy] + mat_2[idx][idy];
+
+    float sum = 0.0;
+    for (int i = 0; i < common_length; ++i){
+        sum += mat_1[idx][i] * mat_2[i][idy];
+    }
+    mat_out[idx][idy] = sum;
 }

@@ -1,0 +1,29 @@
+#version 460 core
+#extension GL_EXT_shader_atomic_int64 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout(local_size_x = 1) in;
+
+const uint height = %H%;
+const uint width = %W%;
+
+layout(std430, binding = 0) buffer InputMat {
+    float input_mat[height][width];
+};
+
+
+layout(std430, binding = 1) buffer Output {
+    float output_mat[height][width];
+};
+
+
+float sigmoid(float x) {
+    return 1.0 / (1.0 + exp(-x));
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint idy = gl_GlobalInvocationID.y;
+
+    output_mat[idx][idy] = sigmoid(input_mat[idx][idy]);
+}

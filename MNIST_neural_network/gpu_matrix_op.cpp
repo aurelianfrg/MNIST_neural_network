@@ -15,6 +15,10 @@ std::string loadShaderSource(const char* path) {
     std::ifstream file(path);
     std::stringstream buffer;
     buffer << file.rdbuf();
+    if (!buffer) {
+        std::cerr << "Failed to load shader: " << path << std::endl;
+        throw runtime_error("Failed to load shader: ");
+	}
     return buffer.str();
 }
 
@@ -44,7 +48,7 @@ int init_gl() {
 
     if (!glfwInit()) return -1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // headless
 

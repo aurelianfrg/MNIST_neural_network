@@ -34,12 +34,16 @@ void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, GLui
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat1);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height_left * common_length, mat1, GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboMat1);
+    /*cout << "Matrix 1:" << endl;
+    printMatrix<T>(mat1, common_length, height_left);*/
 
     glGenBuffers(1, &ssboMat2);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat2);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * common_length * width_right, mat2, GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboMat2);
-
+	/*cout << "Matrix 2:" << endl;
+	printMatrix<T>(mat2, width_right, common_length); */
+    
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height_left * width_right, nullptr, GL_DYNAMIC_READ);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboResult);
@@ -49,6 +53,9 @@ void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, GLui
     if (is_same<T, GLdouble>::value) {
         src = loadShaderSource("shaders/matrix_mult_double.comp");
     }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/matrix_mult_float.comp");
+	}
     else {
         cerr << "matrix_add: unsupported type" << endl;
         exit(-1);
@@ -67,10 +74,6 @@ void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, GLui
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     auto end = std::chrono::steady_clock::now();
 
-    // --- Read results ---
-    // glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
-    // GLdouble(*out)[size] = (GLdouble(*)[size]) glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
-
     glDeleteBuffers(1, &ssboMat1);
     glDeleteBuffers(1, &ssboMat2);
     glDeleteProgram(program);
@@ -79,7 +82,7 @@ void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, GLui
 
 
 template <typename T>
-void matrix_add(T* mat1, T* mat2, GLuint ssboResult, GLuint height_left, GLuint common_length, GLuint width_right) {
+void matrix_add(T* mat1, T* mat2, GLuint ssboResult, GLuint width, GLuint height) {
     // add input square matrices mat1 and mat2 of given size using OpenGL compute shader
     // result is stored in the buffer object ssboResult
 
@@ -87,16 +90,16 @@ void matrix_add(T* mat1, T* mat2, GLuint ssboResult, GLuint height_left, GLuint 
     GLuint ssboMat1, ssboMat2;
     glGenBuffers(1, &ssboMat1);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat1);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height_left * common_length, mat1, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat1, GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboMat1);
 
     glGenBuffers(1, &ssboMat2);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat2);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * common_length * width_right, mat2, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat2, GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboMat2);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height_left * width_right, nullptr, GL_DYNAMIC_READ);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, nullptr, GL_DYNAMIC_READ);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboResult);
 
     // --- Shader ---
@@ -104,28 +107,26 @@ void matrix_add(T* mat1, T* mat2, GLuint ssboResult, GLuint height_left, GLuint 
     if (is_same<T, GLdouble>::value) { 
         src = loadShaderSource("shaders/matrix_add_double.comp");
     }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/matrix_add_float.comp");
+    }
     else {
 		cerr << "matrix_add: unsupported type" << endl;
         exit(-1);
     }
     
-    src.replace(src.find("%HL%"), 4, to_string(height_left));
-    src.replace(src.find("%CL%"), 4, to_string(common_length));
-    src.replace(src.find("%WR%"), 4, to_string(width_right));
+    src.replace(src.find("%H%"), 3, to_string(height));
+    src.replace(src.find("%W%"), 3, to_string(width));
     GLuint program = compileComputeShader(src);
     glUseProgram(program);
 
     // --- Dispatch ---
     auto start = std::chrono::steady_clock::now();
-    glDispatchCompute(height_left, width_right, 1);
+    glDispatchCompute(height, width, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     auto end = std::chrono::steady_clock::now();
-
-    // --- Read results ---
-    // glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
-    // GLdouble(*out)[size] = (GLdouble(*)[size]) glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
     glDeleteBuffers(1, &ssboMat1);
     glDeleteBuffers(1, &ssboMat2);
@@ -135,10 +136,115 @@ void matrix_add(T* mat1, T* mat2, GLuint ssboResult, GLuint height_left, GLuint 
 
 
 template <typename T>
+void matrix_add_constant_vec(T* mat1, T* vec, GLuint ssboResult, GLuint width, GLuint height) {
+    // add input square matrices mat1 and mat2 of given size using OpenGL compute shader
+    // result is stored in the buffer object ssboResult
+
+    // --- Buffers ---
+    GLuint ssboMat1, ssboMat2;
+    glGenBuffers(1, &ssboMat1);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat1);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat1, GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboMat1);
+
+    glGenBuffers(1, &ssboMat2);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat2);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height, vec, GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboMat2);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        src = loadShaderSource("shaders/matrix_add_constant_vec_double.comp");
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/matrix_add_constant_vec_float.comp");
+    }
+    else {
+        cerr << "matrix_add_constant_vec: unsupported type" << endl;
+        exit(-1);
+    }
+
+    src.replace(src.find("%H%"), 3, to_string(height));
+    src.replace(src.find("%W%"), 3, to_string(width));
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(height, width, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
+    glDeleteBuffers(1, &ssboMat1);
+    glDeleteBuffers(1, &ssboMat2);
+    glDeleteProgram(program);
+
+}
+
+
+template <typename T>
+void sigmoid_activation(T* input, GLuint ssboResult, GLuint height, GLuint width) {
+
+    // --- Buffers ---
+    GLuint ssboInput;
+    glGenBuffers(1, &ssboInput);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboInput);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height * width, input, GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboInput);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height * width, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        src = loadShaderSource("shaders/sigmoid_activation_double.comp");
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/sigmoid_activation_float.comp");
+    }
+    else {
+        cerr << "sigmoid_activation: unsupported type" << endl;
+        exit(-1);
+    }
+
+    src.replace(src.find("%H%"), 3, to_string(height));
+    src.replace(src.find("%W%"), 3, to_string(width));
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(height, width, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
+    glDeleteBuffers(1, &ssboInput);
+    glDeleteProgram(program);
+}
+
+template <typename T>
 void printMatrix(T* mat, int width, int height) {
-    for (int i = 0; i < width; ++i) {
-        for (int j = 0; j < height; ++j) {
-            std::cout << std::fixed << std::setprecision(2) << mat[i * width + j] << " ";
+    for (int i = 0; i < height; ++i) {
+        for (int j = 0; j < width; ++j) {
+            // printing one less digit if negative
+            if (mat[i * width + j] < 0) {
+                std::cout << std::fixed << std::setprecision(1) << mat[i * width + j] << " ";
+            }
+            else {
+                std::cout << std::fixed << std::setprecision(2) << mat[i * width + j] << " ";
+            }
+            
         }
         std::cout << std::endl;
     }
@@ -151,35 +257,9 @@ void fillMatrix(T* mat, int width, int height) {
         srand(1729);
         seeded = true;
     }
-    for (int i = 0; i < width; ++i) {
-        for (int j = 0; j < height; ++j) {
+    for (int i = 0; i < height; ++i) {
+        for (int j = 0; j < width; ++j) {
             mat[i * width + j] = 2. * T(rand()) / RAND_MAX;
-        }
-    }
-}
-
-
-// outdated
-template <typename T>
-void printMatrix(T* mat, int size) {
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            std::cout << std::fixed << std::setprecision(2) << mat[i * size + j] << " ";
-        }
-        std::cout << std::endl;
-    }
-}
-
-template <typename T>
-void fillMatrix(T* mat, int size) {
-    static bool seeded = false;
-    if (!seeded) {
-        srand(1729);
-        seeded = true;
-    }
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            mat[i * size + j] = 2. * T(rand()) / RAND_MAX;
         }
     }
 }

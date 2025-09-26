@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <math.h>
 
 #include "gpu_matrix_op.hpp"
 
@@ -12,7 +13,8 @@ template <typename parameters_t>
 class NeuralNetwork {
 	// represents a neural network constituted of layers
 
-	friend ostream& operator << <>(ostream& os, const NeuralNetwork<parameters_t>& nn);
+	template <typename parameters_t>
+	friend ostream& operator <<(ostream& os, const NeuralNetwork<parameters_t>& nn);
 
 protected:
 	unsigned int layersNumber;					//nb of layers
@@ -20,7 +22,7 @@ protected:
 	vector<parameters_t*> layersBias;
 	vector<int> widths;							//widths of each layer
 	vector<int> heights;						//heights of each layer
-	vector<parameters_t*> cachedLayersOutputs;	//cached outputs of each layer to be used during backpropagation				
+	vector<GLuint> cachedLayersOutputsSsbos;	//cached outputs of each layer to be used during backpropagation				
 
 public:
 	NeuralNetwork(unsigned int layersNumber, vector<int> widths, vector<int> heights) : 
@@ -34,7 +36,7 @@ public:
 		}
 		layersBias.resize(layersNumber);
 		layersWeights.resize(layersNumber);
-		cachedLayersOutputs.resize(layersNumber);
+		cachedLayersOutputsSsbos.resize(layersNumber);
 
 		//allocating weights layers and bias layers with corresponding sizes
 		for (int i = 0; i < layersNumber; ++i) {
@@ -43,6 +45,15 @@ public:
 		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
 			layersBias.at(i) = new parameters_t[heights.at(i)]; // one bias per neuron
 		}
+
+		//create as many ssbo as layers to cache the outputs of each layer
+		for (int i = 0; i < layersNumber; ++i) {
+			GLuint ssbo;
+			glGenBuffers(1, &ssbo);
+			cachedLayersOutputsSsbos.at(i) = ssbo;
+		}
+
+		// initializing weights and bias with random values
 		this->random_init(1729);
 	}
 
@@ -53,6 +64,10 @@ public:
 		}
 		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
 			delete[] layersBias.at(i);
+		}
+		//delete ssbo used to cache layers outputs
+		for (int i = 0; i < layersNumber; ++i) {
+			glDeleteBuffers(1, &cachedLayersOutputsSsbos.at(i));
 		}
 	}
 
@@ -88,52 +103,52 @@ public:
 			throw invalid_argument("incorrect input dimensions");
 		}
 
-		GLuint ssboWeighted, ssboBiased, ssboActivated;
+		GLuint ssboWeighted, ssboBiased;
 		glGenBuffers(1, &ssboWeighted);
-		glGenBuffers(1, &ssboActivated);
 		glGenBuffers(1, &ssboBiased);
+		parameters_t *activated, *weighted, *biased;
 
 		// apply weights to input
 		matrix_mult<parameters_t>(layersWeights[0], input, ssboWeighted, heights.at(0), widths.at(0), width);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
-		parameters_t* weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+		weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
 		cout << "After weights multiplication:" << endl;
 		printMatrix<parameters_t>(weighted, width, height);
 
 		//apply activation to input
-		sigmoid_activation<parameters_t>(weighted, ssboActivated, height, width);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboActivated);
-		parameters_t* activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+		sigmoid_activation<parameters_t>(weighted, cachedLayersOutputsSsbos.at(0), height, width);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(0));
+		activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
 		cout << "After activation:" << endl;
 		printMatrix<parameters_t>(activated, width, height);
 
 		// feed forward through the layers
-		for (int step = 1; step < layersNumber; ++step) {
+		for (int layer = 1; layer < layersNumber; ++layer) {
 			// apply weights to input
-			matrix_mult<parameters_t>(layersWeights[step], input, ssboWeighted, heights.at(step), widths.at(step), width);
+			matrix_mult<parameters_t>(layersWeights[layer], activated, ssboWeighted, heights.at(layer), widths.at(layer), width);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
-			parameters_t* weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+			weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
 			cout << "After weights multiplication:" << endl;
-			printMatrix<parameters_t>(weighted, width, heights.at(step));
+			printMatrix<parameters_t>(weighted, width, heights.at(layer));
 
 			// add bias
-			matrix_add_constant_vec<parameters_t>(weighted, layersBias[step], ssboBiased, width, heights.at(step));
+			matrix_add_constant_vec<parameters_t>(weighted, layersBias[layer], ssboBiased, width, heights.at(layer));
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboBiased);
-			parameters_t* biased = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+			biased = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
 			cout << "After bias addition:" << endl;
-			printMatrix<parameters_t>(biased, width, heights.at(step));
+			printMatrix<parameters_t>(biased, width, heights.at(layer));
 
 			//apply activation to input
-			sigmoid_activation<parameters_t>(weighted, ssboActivated, height, width);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboActivated);
-			parameters_t* activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+			sigmoid_activation<parameters_t>(weighted, cachedLayersOutputsSsbos.at(layer), heights.at(layer), widths.at(layer));
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(layer));
+			activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
 			cout << "After activation:" << endl;
-			printMatrix<parameters_t>(activated, width, heights.at(step));
+			printMatrix<parameters_t>(activated, width, heights.at(layer));
 		}
 
 		// there are "width" outputs (= as many as inputs) and they are of the same size as the number of neurons in the last layer
@@ -143,9 +158,33 @@ public:
 		}
 
 		glDeleteBuffers(1, &ssboWeighted);
-		glDeleteBuffers(1, &ssboActivated);
 		glDeleteBuffers(1, &ssboBiased);
 		return output;
+	}
+
+	parameters_t loss(parameters_t* predicted, parameters_t* expected) {
+		// binary cross-entropy loss function
+		// input vectors are expected to be of the same size as the output layer
+		int vectorSize = heights.back();
+		parameters_t totalLoss = 0.0;
+
+		for (int i = 0; i < vectorSize; ++i) {
+			parameters_t singleOutputLoss = -(expected[i] * log(predicted[i]) + (1 - expected[i]) * log(1 - predicted[i]));
+			totalLoss += singleOutputLoss;
+		}
+		return totalLoss / vectorSize; 
+	}
+
+	parameters_t cost(parameters_t* predicted, parameters_t* expected, unsigned int inputsNumber) {
+		int vectorSize = heights.back();
+		parameters_t totalCost = 0.0;	
+
+		for (int input_rank = 0; input_rank < inputsNumber; ++input_rank) {
+			parameters_t* predicted_vector = &predicted[input_rank * vectorSize];
+			parameters_t* expected_vector = &expected[input_rank * vectorSize];
+			totalCost += loss(predicted_vector, expected_vector);
+		}
+		return totalCost / inputsNumber; // mean cost over all inputs
 	}
 };
 

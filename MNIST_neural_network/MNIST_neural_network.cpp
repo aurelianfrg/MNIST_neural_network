@@ -9,6 +9,20 @@
 
 using namespace std;
 
+void printDigit(uint8_t* img, int size) {
+    for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < size; ++j) {
+            if (img[i * size + j] > 128) {
+                cout << "* ";
+            }
+            else {
+                cout << "  ";
+            }
+        }
+        cout << endl;
+		}
+}
+
 int main()
 {
     const GLuint width_right = 2;
@@ -17,7 +31,14 @@ int main()
 
     // --- Initialize GLFW + OpenGL ---
     init_gl();
+
+
+	// --- Load MNIST dataset ---
 	auto reader = mnist::read_dataset<uint8_t, uint8_t>();
+
+    //visualisation
+	printDigit(reader.training_images[0].data(), 28);
+	cout << "Label: " << int(reader.training_labels[0]) << endl;
 
 	// --- test matrix multiplication ---
 
@@ -85,7 +106,11 @@ int main()
 	}
     cout << endl;
 
+	float expected[3] = { 0.0, 0.0, 1.0 };
+	cout << "Cost based on a target of 0 0 1 : " << nn.cost(output.data(), expected, 1);
 
+
+
+    cout << endl;
 	return 0;
-
 }

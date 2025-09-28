@@ -190,17 +190,17 @@ void matrix_add_constant_vec(T* mat1, T* vec, GLuint ssboResult, GLuint width, G
 
 
 template <typename T>
-void sigmoid_activation(T* input, GLuint ssboResult, GLuint height, GLuint width) {
+void sigmoid_activation(T* input, GLuint ssboResult, GLuint vectorSize, GLuint sampleSize) {
 
     // --- Buffers ---
     GLuint ssboInput;
     glGenBuffers(1, &ssboInput);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboInput);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height * width, input, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * vectorSize * sampleSize, input, GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboInput);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height * width, nullptr, GL_DYNAMIC_READ);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * vectorSize * sampleSize, nullptr, GL_DYNAMIC_READ);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboResult);
 
     // --- Shader ---
@@ -216,14 +216,14 @@ void sigmoid_activation(T* input, GLuint ssboResult, GLuint height, GLuint width
         exit(-1);
     }
 
-    src.replace(src.find("%H%"), 3, to_string(height));
-    src.replace(src.find("%W%"), 3, to_string(width));
+    src.replace(src.find("%VS%"), 4, to_string(vectorSize));
+    src.replace(src.find("%SS%"), 4, to_string(sampleSize));
     GLuint program = compileComputeShader(src);
     glUseProgram(program);
 
     // --- Dispatch ---
     auto start = std::chrono::steady_clock::now();
-    glDispatchCompute(height, width, 1);
+    glDispatchCompute(sampleSize, vectorSize, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -232,6 +232,63 @@ void sigmoid_activation(T* input, GLuint ssboResult, GLuint height, GLuint width
     glDeleteBuffers(1, &ssboInput);
     glDeleteProgram(program);
 }
+
+template <typename T>
+void calculate_dC_dZ_BCE_sigmoid(float* A, float* Y, GLuint ssboResult, int vectorSize, int sampleSize) {
+	// dC_dZ for binary cross-entropy loss with sigmoid activation
+    
+    // --- Buffers ---
+    GLuint ssboA, ssboY;
+    glGenBuffers(1, &ssboA);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboA);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, A, GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboA);
+
+    glGenBuffers(1, &ssboY);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboY);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, Y, GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboY);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        cerr << "sigmoid_activation: unsupported type" << endl;
+        exit(-1);
+        //src = loadShaderSource("shaders/calculate_dC_dZ_BCE_sigmoid_double.comp");
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/calculate_dC_dZ_BCE_sigmoid_float.comp");
+    }
+    else {
+        cerr << "sigmoid_activation: unsupported type" << endl;
+        exit(-1);
+    }
+
+    src.replace(src.find("%VS%"), 4, to_string(vectorSize));
+    src.replace(src.find("%SS%"), 4, to_string(sampleSize));
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(sampleSize, vectorSize, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
+    glDeleteBuffers(1, &ssboA);
+    glDeleteBuffers(1, &ssboY);
+    glDeleteProgram(program);
+}
+
+
+
+
 
 template <typename T>
 void printMatrix(T* mat, int width, int height) {

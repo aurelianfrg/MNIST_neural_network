@@ -9,7 +9,7 @@
 
 using namespace std;
 
-void printDigit(uint8_t* img, int size) {
+void printMnistDigit(uint8_t* img, int size) {
     for (int i = 0; i < size; ++i) {
         for (int j = 0; j < size; ++j) {
             if (img[i * size + j] > 128) {
@@ -37,7 +37,7 @@ int main()
 	auto reader = mnist::read_dataset<uint8_t, uint8_t>();
 
     //visualisation
-	printDigit(reader.training_images[0].data(), 28);
+	printMnistDigit(reader.training_images[0].data(), 28);
 	cout << "Label: " << int(reader.training_labels[0]) << endl;
 
 	// --- test matrix multiplication ---
@@ -71,10 +71,9 @@ int main()
 
 	// --- test neural network ---
 	
-    int width = 5;
-    int height = 3;
+	const int inputSize = 15;
 
-    float input_img[15] = { 
+    float input_img[inputSize] = {
         0.1, 0.2, 0.3, 0.4, 0.5,
         0.6, 0.7, 0.8, 0.9, 0.85,
         0.6, 0.7, 0.8, 0.3, 0.4
@@ -82,16 +81,15 @@ int main()
 	float input_vec[3] = { 0.1, 0.2, 0.3 };
 	GLuint ssboResult;
 	glGenBuffers(1, &ssboResult);
-	matrix_add_constant_vec<float>(input_img, input_vec, ssboResult, width, height);
+	matrix_add_constant_vec<float>(input_img, input_vec, ssboResult, inputSize/3, 3);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
 	float* result = (float*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
-	printMatrix<float>(result, width, height);
+	printMatrix<float>(result, inputSize/3, 3);
 
     // for each layer, number of columns (width) must match size of input (number of pixels for first layer / previous number of neurons)
 	// and number of rows (height) is the number of neurons in the layer
-    vector<int> layersWidths = { width*height, width * height };
-    vector<int> layersHeights = { width*height, 3 };
-    NeuralNetwork<float> nn(2, layersWidths, layersHeights);
+    vector<unsigned int> neuronsPerLayer({ 10, 3 });
+    NeuralNetwork<float> nn(2, neuronsPerLayer, inputSize);
 
     cout << "Neural Network initialized:" << endl;
     cout << nn << endl;
@@ -99,7 +97,7 @@ int main()
 	// 1 image is a single vector of width=1 and height=width*height
 	// the width of the input matrix corresponds to the number of images
 
-	vector<float> output = nn.feedForward(input_img, 1, width*height);
+	vector<float> output = nn.feedForward(input_img, 1, inputSize);
 	cout << "Neural Network output:" << endl;
     for (float & val : output) {
         cout << std::fixed << std::setprecision(2) << val << " ";

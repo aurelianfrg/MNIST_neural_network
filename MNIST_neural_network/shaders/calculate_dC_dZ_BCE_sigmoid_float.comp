@@ -6,20 +6,20 @@ const uint vectorSize = %VS%;
 const uint sampleSize = %SS%;
 
 layout(std430, binding = 0) buffer Input1 {
-    double A[sampleSize][vectorSize];
+    float A[sampleSize][vectorSize];
 };
 
 layout(std430, binding = 1) buffer Input2 {
-    double Y[sampleSize][vectorSize];
+    float Y[sampleSize][vectorSize];
 };
 
 layout(std430, binding = 2) buffer Output {
-    double dC_dZ[sampleSize][vectorSize];
+    float dC_dZ[sampleSize][vectorSize];
 };
 
 
 void main() {
-    uint sample = gl_GlobalInvocationID.x;
+    uint sample_number = gl_GlobalInvocationID.x;
     uint neuron = gl_GlobalInvocationID.y;
-    dC_dZ[sample][neuron] = A[sample][neuron] - Y[sample][neuron];
+    dC_dZ[sample_number][neuron] = A[sample_number][neuron] - Y[sample_number][neuron];
 }

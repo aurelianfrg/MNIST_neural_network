@@ -26,7 +26,6 @@ protected:
 	vector<GLuint> cachedLayersOutputsSsbos;	//cached outputs of each layer (state of every neuron) to be used during backpropagation
 
 
-
 public:
 	NeuralNetwork(unsigned int layersNumber, vector<unsigned int> neurons, unsigned int inputSize) : 
 		layersNumber(layersNumber), 
@@ -195,17 +194,29 @@ public:
 		return totalCost / inputsNumber; // mean cost over all inputs
 	}
 
-	void backPropagation(parameters_t* expected) {
+	void backPropagation(parameters_t* expected, unsigned int inputsNumber) {
 
 		// --- Compute cost for the last prediction ---
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.back());
+		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 		parameters_t* A_L = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 		int outputSize = neuronsPerLayer.back();
+
+		parameters_t cost = this->cost(A_L, expected, inputsNumber);
+		cout << "Cost: " << cost << endl;
 
 
 		// --- Cost gradient computation ---
 
 		// calculate dC_dZ(L) for the output layer
+		GLuint ssbo_dC_dZ;
+		glGenBuffers(1, &ssbo_dC_dZ);
+		calculate_dC_dZ_BCE_sigmoid<parameters_t>(A_L, expected, ssbo_dC_dZ, outputSize, inputsNumber);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_dC_dZ);
+		parameters_t* dC_dZ_L = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+
+		cout << "dC_dZ_L:" << endl;
+		printMatrix<parameters_t>(dC_dZ_L, inputsNumber, outputSize);
 
 		// calculate dC_dW(L) and dC_db(L) for the output layer
 

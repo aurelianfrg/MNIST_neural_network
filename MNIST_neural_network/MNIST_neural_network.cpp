@@ -104,9 +104,8 @@ int main()
 	}
     cout << endl;
 
-	float expected[3] = { 0.0, 0.0, 1.0 };
-	cout << "Cost based on a target of 0 0 1 : " << nn.cost(output.data(), expected, 1);
-
+    float expected[3] = { 0.0f, 0.0f, 1.0f };
+	nn.backPropagation(expected, 1);
 
 
     cout << endl;

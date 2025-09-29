@@ -23,6 +23,21 @@ std::string loadShaderSource(const char* path);
 GLuint compileComputeShader(const std::string& src);
 int init_gl();
 
+
+template <typename T>
+void assign_variable(string & src, const char* var_symbol, T value) {
+    // sets the variable in the shader source code to the given value
+    // raises an exception if the variable is not found
+    try {
+        src.replace(src.find(var_symbol), strlen(var_symbol), to_string(value));
+    }
+    catch (const out_of_range& e) {
+        cerr << "Error: variable " << var_symbol << " not found in shader source code" << endl;
+        throw out_of_range("Variable not found in shader source code");
+    }
+}
+
+
 template <typename T>
 void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, GLuint common_length, GLuint width_right) {
 	// multiply input square matrices mat1 and mat2 of given size using OpenGL compute shader
@@ -60,9 +75,9 @@ void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, GLui
         cerr << "matrix_add: unsupported type" << endl;
         exit(-1);
     }
-    src.replace(src.find("%HL%"), 4, to_string(height_left));
-    src.replace(src.find("%CL%"), 4, to_string(common_length));
-    src.replace(src.find("%WR%"), 4, to_string(width_right));
+    assign_variable<GLuint>(src, "%HL%", height_left);
+    assign_variable<GLuint>(src, "%CL%", common_length);
+    assign_variable<GLuint>(src, "%WR%", width_right);
     GLuint program = compileComputeShader(src);
     glUseProgram(program);
 
@@ -114,9 +129,8 @@ void matrix_add(T* mat1, T* mat2, GLuint ssboResult, GLuint width, GLuint height
 		cerr << "matrix_add: unsupported type" << endl;
         exit(-1);
     }
-    
-    src.replace(src.find("%H%"), 3, to_string(height));
-    src.replace(src.find("%W%"), 3, to_string(width));
+    assign_variable<GLuint>(src, "%H%", height);
+    assign_variable<GLuint>(src, "%W%", width);
     GLuint program = compileComputeShader(src);
     glUseProgram(program);
 
@@ -168,9 +182,9 @@ void matrix_add_constant_vec(T* mat1, T* vec, GLuint ssboResult, GLuint width, G
         cerr << "matrix_add_constant_vec: unsupported type" << endl;
         exit(-1);
     }
+    assign_variable<GLuint>(src, "%H%", height);
+    assign_variable<GLuint>(src, "%W%", width);
 
-    src.replace(src.find("%H%"), 3, to_string(height));
-    src.replace(src.find("%W%"), 3, to_string(width));
     GLuint program = compileComputeShader(src);
     glUseProgram(program);
 
@@ -215,9 +229,9 @@ void sigmoid_activation(T* input, GLuint ssboResult, GLuint vectorSize, GLuint s
         cerr << "sigmoid_activation: unsupported type" << endl;
         exit(-1);
     }
+    assign_variable<GLuint>(src, "%VS%", vectorSize);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
 
-    src.replace(src.find("%VS%"), 4, to_string(vectorSize));
-    src.replace(src.find("%SS%"), 4, to_string(sampleSize));
     GLuint program = compileComputeShader(src);
     glUseProgram(program);
 
@@ -267,9 +281,9 @@ void calculate_dC_dZ_BCE_sigmoid(float* A, float* Y, GLuint ssboResult, int vect
         cerr << "sigmoid_activation: unsupported type" << endl;
         exit(-1);
     }
+    assign_variable<GLuint>(src, "%VS%", vectorSize);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
 
-    src.replace(src.find("%VS%"), 4, to_string(vectorSize));
-    src.replace(src.find("%SS%"), 4, to_string(sampleSize));
     GLuint program = compileComputeShader(src);
     glUseProgram(program);
 
@@ -285,6 +299,9 @@ void calculate_dC_dZ_BCE_sigmoid(float* A, float* Y, GLuint ssboResult, int vect
     glDeleteBuffers(1, &ssboY);
     glDeleteProgram(program);
 }
+
+
+
 
 
 

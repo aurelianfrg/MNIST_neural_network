@@ -39,7 +39,7 @@ void assign_variable(string & src, const char* var_symbol, T value) {
 
 
 template <typename T>
-void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, GLuint common_length, GLuint width_right) {
+void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, unsigned int common_length, unsigned int width_right) {
 	// multiply input square matrices mat1 and mat2 of given size using OpenGL compute shader
 	// result is stored in the buffer object ssboResult
 
@@ -97,7 +97,7 @@ void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, GLui
 
 
 template <typename T>
-void matrix_add(T* mat1, T* mat2, GLuint ssboResult, GLuint width, GLuint height) {
+void matrix_add(T* mat1, T* mat2, GLuint ssboResult, unsigned int width, unsigned int height) {
     // add input square matrices mat1 and mat2 of given size using OpenGL compute shader
     // result is stored in the buffer object ssboResult
 
@@ -150,7 +150,7 @@ void matrix_add(T* mat1, T* mat2, GLuint ssboResult, GLuint width, GLuint height
 
 
 template <typename T>
-void matrix_add_constant_vec(T* mat1, T* vec, GLuint ssboResult, GLuint width, GLuint height) {
+void matrix_add_constant_vec(T* mat1, T* vec, GLuint ssboResult, unsigned int width, unsigned int height) {
     // add input square matrices mat1 and mat2 of given size using OpenGL compute shader
     // result is stored in the buffer object ssboResult
 
@@ -204,7 +204,7 @@ void matrix_add_constant_vec(T* mat1, T* vec, GLuint ssboResult, GLuint width, G
 
 
 template <typename T>
-void sigmoid_activation(T* input, GLuint ssboResult, GLuint vectorSize, GLuint sampleSize) {
+void sigmoid_activation(T* input, GLuint ssboResult, unsigned int vectorSize, unsigned int sampleSize) {
 
     // --- Buffers ---
     GLuint ssboInput;
@@ -248,14 +248,14 @@ void sigmoid_activation(T* input, GLuint ssboResult, GLuint vectorSize, GLuint s
 }
 
 template <typename T>
-void calculate_dC_dZ_BCE_sigmoid(float* A, float* Y, GLuint ssboResult, int vectorSize, int sampleSize) {
+void calculate_dC_dZL_BCE_sigmoid(float* A_L, float* Y, GLuint ssboResult, unsigned int vectorSize, unsigned int sampleSize) {
 	// dC_dZ for binary cross-entropy loss with sigmoid activation
     
     // --- Buffers ---
     GLuint ssboA, ssboY;
     glGenBuffers(1, &ssboA);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboA);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, A, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, A_L, GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboA);
 
     glGenBuffers(1, &ssboY);
@@ -270,7 +270,7 @@ void calculate_dC_dZ_BCE_sigmoid(float* A, float* Y, GLuint ssboResult, int vect
     // --- Shader ---
     string src;
     if (is_same<T, GLdouble>::value) {
-        cerr << "sigmoid_activation: unsupported type" << endl;
+        cerr << "calculate_dC_dZL_BCE_sigmoid: unsupported type" << endl;
         exit(-1);
         //src = loadShaderSource("shaders/calculate_dC_dZ_BCE_sigmoid_double.comp");
     }
@@ -301,8 +301,88 @@ void calculate_dC_dZ_BCE_sigmoid(float* A, float* Y, GLuint ssboResult, int vect
 }
 
 
+template <typename T>
+void calculate_dC_dWl(GLuint dC_dZl_ssbo, GLuint Al_previous_ssbo, GLuint ssboResult, unsigned int neurons, unsigned int previousNeurons, unsigned int sampleSize) {
 
+    // --- Buffers ---
 
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, dC_dZl_ssbo);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, Al_previous_ssbo);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * neurons * previousNeurons, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        cerr << "calculate_dC_dWl: unsupported type" << endl;
+        exit(-1);
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/calculate_dC_dWl_float.comp");
+    }
+    else {
+        cerr << "sigmoid_activation: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%N%", neurons);
+    assign_variable<GLuint>(src, "%PN%", previousNeurons);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(neurons, previousNeurons, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
+    glDeleteProgram(program);
+}
+
+template <typename T>
+void compress_matrix_columns(GLuint ssboInput, GLuint ssboResult, unsigned int height, unsigned int width) {
+
+    // --- Buffers ---
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboInput);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        cerr << "compress_matrix_columns: unsupported type" << endl;
+        exit(-1);
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/matrix_columns_compress_float.comp");
+    }
+    else {
+        cerr << "sigmoid_activation: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%H%", height);
+    assign_variable<GLuint>(src, "%W%", width);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(height, 1, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
+    glDeleteProgram(program);
+}
 
 
 

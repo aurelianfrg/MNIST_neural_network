@@ -1,0 +1,32 @@
+#version 460 core
+
+layout(local_size_x = 1) in;
+
+const uint neurons = %N%;
+const uint previousNeurons = %PN%;
+const uint sampleSize = %SS%;
+
+layout(std430, binding = 0) buffer Input1 {
+    float dC_dZl[sampleSize][neurons];
+};
+
+layout(std430, binding = 1) buffer Input2 {
+    float Al_previous[sampleSize][previousNeurons];
+};
+
+layout(std430, binding = 2) buffer Output {
+    float dC_dWl[neurons][previousNeurons];
+};
+
+
+void main() {
+
+    uint neuron = gl_GlobalInvocationID.x;
+    uint previousNeuron = gl_GlobalInvocationID.y;
+
+    float sum = 0.0;
+    for (int sample_number = 0; sample_number < sampleSize; sample_number++) {
+        sum += dC_dZl[sample_number][neuron] * Al_previous[sample_number][previousNeuron];
+    }
+    dC_dWl[neuron][previousNeuron] = sum / sampleSize / neurons;
+}

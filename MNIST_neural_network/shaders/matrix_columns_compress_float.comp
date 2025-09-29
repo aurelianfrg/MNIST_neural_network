@@ -1,0 +1,24 @@
+#version 460 core
+
+layout(local_size_x = 1) in;
+
+const uint height = %H%;
+const uint width = %W%;
+
+layout(std430, binding = 0) buffer InputMat {
+    float input_mat[height][width];
+};
+
+layout(std430, binding = 1) buffer Output {
+    float output_vec[height];
+};
+
+void main() {
+    uint row = gl_GlobalInvocationID.x;
+    float sum = 0.0;
+    for (int i = 0; i < width; ++i) {
+        sum += input_mat[row][i];
+    }
+    output_vec[row] = sum;
+
+}

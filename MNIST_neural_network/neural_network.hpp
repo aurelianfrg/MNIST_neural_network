@@ -163,6 +163,7 @@ public:
 		for (int i = 0; i < sampleSize * neuronsPerLayer.back(); ++i) {
 			output[i] = activated[i];
 		}
+		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER); // unmap the last mapped buffer so it can be requested again if backpropagation is called
 
 		glDeleteBuffers(1, &ssboWeighted);
 		glDeleteBuffers(1, &ssboBiased);
@@ -192,13 +193,13 @@ public:
 			totalCost += loss(predicted_vector, expected_vector);
 		}
 		return totalCost / inputsNumber; // mean cost over all inputs
+		return totalCost / inputsNumber; // mean cost over all inputs
 	}
 
 	void backPropagation(parameters_t* expected, unsigned int inputsNumber) {
 
 		// --- Compute cost for the last prediction ---
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.back());
-		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 		parameters_t* A_L = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 		int outputSize = neuronsPerLayer.back();
 
@@ -208,25 +209,47 @@ public:
 
 		// --- Cost gradient computation ---
 
-		// calculate dC_dZ(L) for the output layer
+		// calculate dC_dZ(L) 
 		GLuint ssbo_dC_dZ;
 		glGenBuffers(1, &ssbo_dC_dZ);
-		calculate_dC_dZ_BCE_sigmoid<parameters_t>(A_L, expected, ssbo_dC_dZ, outputSize, inputsNumber);
+		calculate_dC_dZL_BCE_sigmoid<parameters_t>(A_L, expected, ssbo_dC_dZ, outputSize, inputsNumber);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_dC_dZ);
 		parameters_t* dC_dZ_L = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
 		cout << "dC_dZ_L:" << endl;
-		printMatrix<parameters_t>(dC_dZ_L, inputsNumber, outputSize);
+		printMatrix<parameters_t>(dC_dZ_L, 1, outputSize);
 
-		// calculate dC_dW(L) and dC_db(L) for the output layer
+		GLuint ssbo_dC_dW, ssbo_dC_db;
+		glGenBuffers(1, &ssbo_dC_dW);
+		glGenBuffers(1, &ssbo_dC_db);
 
-		// calculate dC_dA(L-1) to be used for the previous layer
+		for (int layer = layersNumber - 1; layer > 0; --layer) {
+			cout << "Layer " << layer << ":" << endl;
+
+			calculate_dC_dWl<parameters_t>(ssbo_dC_dZ, cachedLayersOutputsSsbos.at(layer-1), ssbo_dC_dW, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer-1), inputsNumber);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_dC_dW);
+			parameters_t* dC_dW = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+
+			cout << "dC_dW:" << endl;
+			printMatrix<parameters_t>(dC_dW, neuronsPerLayer.at(layer - 1), neuronsPerLayer.at(layer));
+
+			compress_matrix_columns<parameters_t>(ssbo_dC_dZ, ssbo_dC_db, neuronsPerLayer.at(layer), inputsNumber);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_dC_db);
+			parameters_t* dC_db = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+
+			cout << "dC_db:" << endl;
+			printMatrix<parameters_t>(dC_dW, 1, neuronsPerLayer.at(layer));
+		}
+		
+
+
+		// calculate dC_dZ(L-1) to be used for the previous layer
 
 		// for each previous layer l = L-1 ... 1
 			// calculate dC_dZ(l)
 			// calculate dC_dW(l) and dC_db(l)
-			// calculate dC_dA(l-1) to be used for the previous layer
 
+		// récupérer l'input pour les poids d'entrée (l'avoir stocké qq part)
 	}
 };
 

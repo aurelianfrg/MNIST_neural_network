@@ -19,7 +19,9 @@ layout(std430, binding = 2) buffer Output {
 
 
 void main() {
-    uint sample_number = gl_GlobalInvocationID.x;
+    uint sampleNumber = gl_GlobalInvocationID.x;
     uint neuron = gl_GlobalInvocationID.y;
-    dC_dZ[sample_number][neuron] = A[sample_number][neuron] - Y[sample_number][neuron];
+
+    dC_dZ[sampleNumber][neuron] = A[sampleNumber][neuron] - Y[sampleNumber][neuron];
+
 }

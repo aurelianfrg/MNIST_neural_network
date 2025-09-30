@@ -104,10 +104,15 @@ int main()
 	}
     cout << endl;
 
-    float expected[3] = { 0.0f, 0.0f, 1.0f };
-	nn.backPropagation(expected, 1);
+	float learningRate = 0.1f;
+    float expected[3] = { 1.0f, 0.0f, 0.0f };
+	nn.backPropagation(expected, input_img, 1, learningRate);
 
-
+    
     cout << endl;
 	return 0;
 }
+
+
+// TODO : store all data in gl buffers to avoid cpu-gpu transfers
+// TODO : coherence of height and width variables (sometimes swapped)

@@ -28,5 +28,5 @@ void main() {
     for (int sample_number = 0; sample_number < sampleSize; sample_number++) {
         sum += dC_dZl[sample_number][neuron] * Al_previous[sample_number][previousNeuron];
     }
-    dC_dWl[neuron][previousNeuron] = sum / sampleSize / neurons;
+    dC_dWl[neuron][previousNeuron] = sum;
 }

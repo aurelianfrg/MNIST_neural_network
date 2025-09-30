@@ -1,0 +1,27 @@
+#version 460 core
+
+layout(local_size_x = 1) in;
+
+const uint neurons = %N%;
+const uint previousNeurons = %PN%;
+const float learningRate = %LR%;
+
+layout(std430, binding = 0) buffer Input1 {
+    float parameters[neurons][previousNeurons];
+};
+
+layout(std430, binding = 1) buffer Input2 {
+    float dC_dParam[neurons][previousNeurons];
+};
+
+layout(std430, binding = 2) buffer Output {
+    float updatedParameters[neurons][previousNeurons];
+};
+
+
+void main() {
+
+    uint neuron = gl_GlobalInvocationID.x;
+    uint previousNeuron = gl_GlobalInvocationID.y;
+    updatedParameters[neuron][previousNeuron] = parameters[neuron][previousNeuron] - learningRate * dC_dParam[neuron][previousNeuron];
+}

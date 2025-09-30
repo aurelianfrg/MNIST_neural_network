@@ -345,13 +345,13 @@ void calculate_dC_dWl(GLuint dC_dZl_ssbo, GLuint Al_previous_ssbo, GLuint ssboRe
 }
 
 template <typename T>
-void compress_matrix_columns(GLuint ssboInput, GLuint ssboResult, unsigned int height, unsigned int width) {
+void calculate_dC_dbl(GLuint ssboInput, GLuint ssboResult, unsigned int vectorSize, unsigned int sampleSize) {
 
     // --- Buffers ---
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboInput);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height, nullptr, GL_DYNAMIC_READ);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * vectorSize * sampleSize, nullptr, GL_DYNAMIC_READ);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboResult);
 
     // --- Shader ---
@@ -361,21 +361,21 @@ void compress_matrix_columns(GLuint ssboInput, GLuint ssboResult, unsigned int h
         exit(-1);
     }
     else if (is_same<T, GLfloat>::value) {
-        src = loadShaderSource("shaders/matrix_columns_compress_float.comp");
+        src = loadShaderSource("shaders/calculate_dC_dbl_float.comp");
     }
     else {
         cerr << "sigmoid_activation: unsupported type" << endl;
         exit(-1);
     }
-    assign_variable<GLuint>(src, "%H%", height);
-    assign_variable<GLuint>(src, "%W%", width);
+    assign_variable<GLuint>(src, "%VS%", vectorSize);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
 
     GLuint program = compileComputeShader(src);
     glUseProgram(program);
 
     // --- Dispatch ---
     auto start = std::chrono::steady_clock::now();
-    glDispatchCompute(height, 1, 1);
+    glDispatchCompute(vectorSize, 1, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -384,7 +384,98 @@ void compress_matrix_columns(GLuint ssboInput, GLuint ssboResult, unsigned int h
     glDeleteProgram(program);
 }
 
+template <typename T>
+void update_parameters(T* weights, GLuint dC_dWl_ssbo, GLuint ssboResult, unsigned int previous_neurons, unsigned int neurons, T learning_rate) {
 
+    GLuint ssboW;
+    glGenBuffers(1, &ssboW);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * previous_neurons * neurons, weights, GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboW);
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, dC_dWl_ssbo);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * previous_neurons * neurons, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        cerr << "update_parameters_float: unsupported type" << endl;
+        exit(-1);
+        //src = loadShaderSource("shaders/calculate_dC_dZ_BCE_sigmoid_double.comp");
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/update_parameters_float.comp");
+    }
+    else {
+        cerr << "update_parameters: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%N%", neurons);
+    assign_variable<GLuint>(src, "%PN%", previous_neurons);
+    assign_variable<T>(src, "%LR%", learning_rate);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(neurons, previous_neurons, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
+    glDeleteBuffers(1, &ssboW);
+    glDeleteProgram(program);
+}
+
+
+template <typename T>
+void calculate_dC_dZl_previous(GLuint dC_dZl_ssbo, GLuint A_previous_ssbo, GLuint Wl_ssbo, GLuint ssboResult, unsigned int neurons, unsigned int previousNeurons, unsigned int sampleSize) {
+
+    // --- Buffers ---
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, dC_dZl_ssbo);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, A_previous_ssbo);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, Wl_ssbo);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * sampleSize * previousNeurons, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        cerr << "calculate_dC_dZl_previous: unsupported type" << endl;
+        exit(-1);
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/calculate_dC_dZl_previous_float.comp");
+    }
+    else {
+        cerr << "calculate_dC_dZl_previous: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%N%", neurons);
+    assign_variable<GLuint>(src, "%PN%", previousNeurons);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(sampleSize, previousNeurons, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
+    glDeleteProgram(program);
+}
 
 
 template <typename T>

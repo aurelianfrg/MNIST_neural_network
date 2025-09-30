@@ -25,6 +25,8 @@ protected:
 
 	vector<GLuint> cachedLayersOutputsSsbos;	//cached outputs of each layer (state of every neuron) to be used during backpropagation
 
+	bool verbose;							//whether to print debug information during feedforward and backpropagation
+
 
 public:
 	NeuralNetwork(unsigned int layersNumber, vector<unsigned int> neurons, unsigned int inputSize) : 
@@ -58,6 +60,8 @@ public:
 
 		// initializing weights and bias with random values
 		this->random_init(1729);
+
+		verbose = false;
 	}
 
 	~NeuralNetwork() {
@@ -72,6 +76,10 @@ public:
 		for (int i = 0; i < layersNumber; ++i) {
 			glDeleteBuffers(1, &cachedLayersOutputsSsbos.at(i));
 		}
+	}
+
+	void setVerbose(bool v) {
+		verbose = v;
 	}
 
 	void random_init(int seed) {
@@ -120,16 +128,20 @@ public:
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
 		weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-		cout << "After weights multiplication:" << endl;
-		printMatrix<parameters_t>(weighted, sampleSize, neuronsPerLayer.at(0));
+		if (verbose) {
+			cout << "After weights multiplication:" << endl;
+			printMatrix<parameters_t>(weighted, sampleSize, neuronsPerLayer.at(0));
+		}
 
 		//apply activation to input
 		sigmoid_activation<parameters_t>(weighted, cachedLayersOutputsSsbos.at(0), neuronsPerLayer.at(0), sampleSize);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(0));
 		activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-		cout << "After activation:" << endl;
-		printMatrix<parameters_t>(activated, sampleSize, neuronsPerLayer.at(0));
+		if (verbose) {
+			cout << "After activation:" << endl;
+			printMatrix<parameters_t>(activated, sampleSize, neuronsPerLayer.at(0));
+		}
 
 		// feed forward through the layers
 		for (int layer = 1; layer < layersNumber; ++layer) {
@@ -138,24 +150,30 @@ public:
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
 			weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-			cout << "After weights multiplication:" << endl;
-			printMatrix<parameters_t>(weighted, sampleSize, neuronsPerLayer.at(layer));
+			if (verbose) {
+				cout << "After weights multiplication:" << endl;
+				printMatrix<parameters_t>(weighted, sampleSize, neuronsPerLayer.at(layer));
+			}
 
 			// add bias
 			matrix_add_constant_vec<parameters_t>(weighted, layersBias[layer], ssboBiased, sampleSize, neuronsPerLayer.at(layer));
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboBiased);
 			biased = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-			cout << "After bias addition:" << endl;
-			printMatrix<parameters_t>(biased, sampleSize, neuronsPerLayer.at(layer));
+			if (verbose) {
+				cout << "After bias addition:" << endl;
+				printMatrix<parameters_t>(biased, sampleSize, neuronsPerLayer.at(layer));
+			}
 
 			//apply activation to input
 			sigmoid_activation<parameters_t>(weighted, cachedLayersOutputsSsbos.at(layer), neuronsPerLayer.at(layer), sampleSize);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(layer));
 			activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-			cout << "After activation:" << endl;
-			printMatrix<parameters_t>(activated, sampleSize, neuronsPerLayer.at(layer));
+			if (verbose) {
+				cout << "After activation:" << endl;
+				printMatrix<parameters_t>(activated, sampleSize, neuronsPerLayer.at(layer));
+			}
 		}
 
 		// there are "sampleSize" outputs (= as many as inputs) and they are of the same size as the number of neurons in the last layer
@@ -210,69 +228,116 @@ public:
 		// --- Cost gradient computation ---
 
 		// calculate dC_dZ(L) to start backpropagation from the last layer
-		GLuint ssbo_dC_dZ;
-		glGenBuffers(1, &ssbo_dC_dZ);
-		calculate_dC_dZL_BCE_sigmoid<parameters_t>(A_L, expected, ssbo_dC_dZ, outputSize, inputsNumber);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_dC_dZ);
+		GLuint dC_dZ_ssbo;
+		glGenBuffers(1, &dC_dZ_ssbo);
+		calculate_dC_dZL_BCE_sigmoid<parameters_t>(A_L, expected, dC_dZ_ssbo, outputSize, inputsNumber);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dZ_ssbo);
 		parameters_t* dC_dZ_L = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-		cout << "dC_dZ_L:" << endl;
-		printMatrix<parameters_t>(dC_dZ_L, 1, outputSize);
+		if (verbose) {
+			cout << "dC_dZ_L:" << endl;
+			printMatrix<parameters_t>(dC_dZ_L, 1, outputSize);
+		}
 
-		GLuint ssbo_dC_dW, ssbo_dC_db, ssbo_W, ssbo_b;
-		glGenBuffers(1, &ssbo_dC_dW);
-		glGenBuffers(1, &ssbo_dC_db);
-		glGenBuffers(1, &ssbo_W);
-		glGenBuffers(1, &ssbo_b);
+		GLuint dC_dW_ssbo, dC_db_ssbo, W_ssbo, b_ssbo;
+		glGenBuffers(1, &dC_dW_ssbo);
+		glGenBuffers(1, &dC_db_ssbo);
+		glGenBuffers(1, &W_ssbo);
+		glGenBuffers(1, &b_ssbo);
 
 		for (int layer = layersNumber - 1; layer > 0; --layer) {
-			cout << "Layer " << layer << ":" << endl;
+			if (verbose) {
+				cout << "Layer " << layer << ":" << endl;
+			}
 
 			// --- calculate dc_dW(l) and dC_db(l) ---
-			calculate_dC_dWl<parameters_t>(ssbo_dC_dZ, cachedLayersOutputsSsbos.at(layer-1), ssbo_dC_dW, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer-1), inputsNumber);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_dC_dW);
+			calculate_dC_dWl<parameters_t>(dC_dZ_ssbo, cachedLayersOutputsSsbos.at(layer-1), dC_dW_ssbo, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer-1), inputsNumber);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dW_ssbo);
 			parameters_t* dC_dW = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-			cout << "dC_dW:" << endl;
-			printMatrix<parameters_t>(dC_dW, neuronsPerLayer.at(layer - 1), neuronsPerLayer.at(layer));
+			if (verbose) {
+				cout << "dC_dW:" << endl;
+				printMatrix<parameters_t>(dC_dW, neuronsPerLayer.at(layer - 1), neuronsPerLayer.at(layer));
+			}
 
-			calculate_dC_dbl<parameters_t>(ssbo_dC_dZ, ssbo_dC_db, neuronsPerLayer.at(layer), inputsNumber);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_dC_db);
+			calculate_dC_dbl<parameters_t>(dC_dZ_ssbo, dC_db_ssbo, neuronsPerLayer.at(layer), inputsNumber);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_db_ssbo);
 			parameters_t* dC_db = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-			cout << "dC_db:" << endl;
-			printMatrix<parameters_t>(dC_db, 1, neuronsPerLayer.at(layer));
+			if (verbose) {
+				cout << "dC_db:" << endl;
+				printMatrix<parameters_t>(dC_db, 1, neuronsPerLayer.at(layer));
+			}
 
 			// --- update weights and bias in the opposite direction of the gradient ---
-			update_parameters<parameters_t>(layersWeights[layer], ssbo_dC_dW, ssbo_W, neuronsPerLayer.at(layer - 1), neuronsPerLayer.at(layer), learningRate);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_W);
+			update_parameters<parameters_t>(layersWeights[layer], dC_dW_ssbo, W_ssbo, neuronsPerLayer.at(layer - 1), neuronsPerLayer.at(layer), learningRate);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, W_ssbo);
 			parameters_t* updatedWeights = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-			cout << "Updated weights:" << endl;
-			printMatrix<parameters_t>(updatedWeights, neuronsPerLayer.at(layer - 1), neuronsPerLayer.at(layer));
+			if (verbose) {
+				cout << "Updated weights:" << endl;
+				printMatrix<parameters_t>(updatedWeights, neuronsPerLayer.at(layer - 1), neuronsPerLayer.at(layer));
+			}
 			// copy updated weights back to the neural network
 			copy(updatedWeights, updatedWeights + neuronsPerLayer.at(layer - 1) * neuronsPerLayer.at(layer), layersWeights[layer]);
 
-			update_parameters<parameters_t>(layersBias[layer], ssbo_dC_db, ssbo_b, 1, neuronsPerLayer.at(layer), learningRate);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_b);
+			update_parameters<parameters_t>(layersBias[layer], dC_db_ssbo, b_ssbo, 1, neuronsPerLayer.at(layer), learningRate);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, b_ssbo);
 			parameters_t* updatedBias = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-			cout << "Updated bias:" << endl;
-			printMatrix<parameters_t>(updatedBias, 1, neuronsPerLayer.at(layer));
+			if (verbose) {
+				cout << "Updated bias:" << endl;
+				printMatrix<parameters_t>(updatedBias, 1, neuronsPerLayer.at(layer));
+			}
 			copy(updatedBias, updatedBias + neuronsPerLayer.at(layer), layersBias[layer]);
 			
 			// --- calculate dC_dZ(l-1) to continue backpropagation ---
-			GLuint ssbo_dC_dZ_previous;
-			glGenBuffers(1, &ssbo_dC_dZ_previous);
-			calculate_dC_dZl_previous<parameters_t>(ssbo_dC_dZ, cachedLayersOutputsSsbos.at(layer - 1), ssbo_W, ssbo_dC_dZ_previous, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer - 1), inputsNumber);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_dC_dZ_previous);
+			GLuint dC_dZ_previous_ssbo;
+			glGenBuffers(1, &dC_dZ_previous_ssbo);
+			calculate_dC_dZl_previous<parameters_t>(dC_dZ_ssbo, cachedLayersOutputsSsbos.at(layer - 1), W_ssbo, dC_dZ_previous_ssbo, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer - 1), inputsNumber);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dZ_previous_ssbo);
 			parameters_t* dC_dZ_previous = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
-			cout << "dC_dZ_previous :" << endl;
-			printMatrix<parameters_t>(dC_dZ_previous, inputsNumber, neuronsPerLayer.at(layer-1));
+			if (verbose) {
+				cout << "dC_dZ_previous :" << endl;
+				printMatrix<parameters_t>(dC_dZ_previous, inputsNumber, neuronsPerLayer.at(layer - 1));
+			}
+
+			glDeleteBuffers(1, &dC_dZ_ssbo);
+			dC_dZ_ssbo = dC_dZ_previous_ssbo;
+
 		}		
 		// handle the input layer separately to update weights only (no bias), with input as previous layer output
 
+		GLuint ssbo_input;
+		glGenBuffers(1, &ssbo_input);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_input);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(parameters_t) * inputSize * inputsNumber, input, GL_STATIC_DRAW);
+		calculate_dC_dWl<parameters_t>(dC_dZ_ssbo, ssbo_input, dC_dW_ssbo, neuronsPerLayer.at(0), inputSize, inputsNumber);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dW_ssbo);
+		parameters_t* dC_dW = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+
+		if (verbose) {
+			cout << "dC_dW (input layer):" << endl;
+			printMatrix<parameters_t>(dC_dW, inputSize, neuronsPerLayer.at(0));
+		}
+
+		update_parameters<parameters_t>(layersWeights[0], dC_dW_ssbo, W_ssbo, inputSize, neuronsPerLayer.at(0), learningRate);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, W_ssbo);
+		parameters_t* updatedWeights = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+
+		if (verbose) {
+			cout << "Updated weights (input layer):" << endl;
+			printMatrix<parameters_t>(updatedWeights, inputSize, neuronsPerLayer.at(0));
+		}
+
+		copy(updatedWeights, updatedWeights + inputSize * neuronsPerLayer.at(0), layersWeights[0]);
+
+		glDeleteBuffers(1, &dC_dZ_ssbo);
+		glDeleteBuffers(1, &dC_dW_ssbo);
+		glDeleteBuffers(1, &dC_db_ssbo);
+		glDeleteBuffers(1, &W_ssbo);
+		glDeleteBuffers(1, &b_ssbo);
 	}
 };
 

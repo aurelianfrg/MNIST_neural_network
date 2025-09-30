@@ -107,8 +107,8 @@ public:
 	}
 
 	vector<parameters_t> feedForward(
-		parameters_t* input,	// input matrix containing one column per input
-		unsigned int sampleSize,		// number of inputs (number of columns of the input matrix)
+		parameters_t* input,		// input matrix containing one column per input
+		unsigned int sampleSize,	// number of inputs (number of columns of the input matrix)
 		unsigned int vectorSize)	// size of each input (number of rows of the input matrix)
 	{
 		// feed forward the input through the neural network and return the output of the last layer
@@ -214,7 +214,12 @@ public:
 		return totalCost / inputsNumber; // mean cost over all inputs
 	}
 
-	void backPropagation(parameters_t* expected, parameters_t* input, unsigned int inputsNumber, parameters_t learningRate) {
+	void backPropagation(
+		parameters_t* expected, 
+		parameters_t* input, 
+		unsigned int inputsNumber, 
+		parameters_t learningRate
+	) {
 
 		// --- Compute cost for the last prediction ---
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.back());
@@ -339,7 +344,23 @@ public:
 		glDeleteBuffers(1, &W_ssbo);
 		glDeleteBuffers(1, &b_ssbo);
 	}
+
+	void train(
+		parameters_t * training_set,	// contiguously allocated inputs for training (each must be of inputSize)
+		parameters_t * labels,			// contiguously allocated labels (each must match the size of the output layer)
+		unsigned int inputsNumber,		
+		unsigned int epochs,			// number of consecutive runs of feedForward then backPropagation
+		parameters_t learningRate
+	) 
+	{
+		for (int e = 0; e < epochs; ++e) {
+			feedForward(training_set, inputsNumber, this->inputSize);
+			backPropagation(labels, training_set, inputsNumber, learningRate);
+		}
+	}
 };
+
+
 
 template <typename parameters_t>
 ostream & operator <<(ostream &os, const NeuralNetwork<parameters_t> & nn) {

@@ -108,6 +108,12 @@ int main()
     float expected[3] = { 1.0f, 0.0f, 0.0f };
 	nn.backPropagation(expected, input_img, 1, learningRate);
 
+
+
+    // real training
+    nn.train(input_img, expected, 1, 1000, 0.1);
+	cout << "Neural Network after training:" << nn << endl;
+
     
     cout << endl;
 	return 0;

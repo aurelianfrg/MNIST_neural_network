@@ -30,7 +30,7 @@ void main() {
 
     float sum = 0.0;
     for (int neuron = 0; neuron < neurons; ++neuron) {
-        sum += dC_dZl[sampleNumber][neuron] * Wl[neuron][previousNeuron] * A_previous[sampleNumber][previousNeuron] * ( 1 - A_previous[sampleNumber][previousNeuron]);
+        sum += dC_dZl[sampleNumber][neuron] * Wl[neuron][previousNeuron];
     }
-    dC_dZ_previous[sampleNumber][previousNeuron] = sum;
+    dC_dZ_previous[sampleNumber][previousNeuron] = sum * A_previous[sampleNumber][previousNeuron] * ( 1 - A_previous[sampleNumber][previousNeuron]);
 }

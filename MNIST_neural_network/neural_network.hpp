@@ -100,7 +100,7 @@ public:
 
 		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
 			for (int neuron_rank = 0; neuron_rank < neuronsPerLayer.at(i); ++neuron_rank) {
-				parameters_t rand_value = parameters_t(rand()) / RAND_MAX;
+				parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
 				layersBias[i][neuron_rank] = rand_value;
 			}
 		}
@@ -135,6 +135,7 @@ public:
 
 		//apply activation to input
 		sigmoid_activation<parameters_t>(weighted, cachedLayersOutputsSsbos.at(0), neuronsPerLayer.at(0), sampleSize);
+		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER); 
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(0));
 		activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
@@ -147,6 +148,7 @@ public:
 		for (int layer = 1; layer < layersNumber; ++layer) {
 			// apply weights to input
 			matrix_mult<parameters_t>(layersWeights[layer], activated, ssboWeighted, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer-1), sampleSize);
+			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
 			weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
@@ -157,6 +159,7 @@ public:
 
 			// add bias
 			matrix_add_constant_vec<parameters_t>(weighted, layersBias[layer], ssboBiased, sampleSize, neuronsPerLayer.at(layer));
+			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboBiased);
 			biased = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
@@ -166,7 +169,8 @@ public:
 			}
 
 			//apply activation to input
-			sigmoid_activation<parameters_t>(weighted, cachedLayersOutputsSsbos.at(layer), neuronsPerLayer.at(layer), sampleSize);
+			sigmoid_activation<parameters_t>(biased, cachedLayersOutputsSsbos.at(layer), neuronsPerLayer.at(layer), sampleSize);
+			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(layer));
 			activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
@@ -211,7 +215,6 @@ public:
 			totalCost += loss(predicted_vector, expected_vector);
 		}
 		return totalCost / inputsNumber; // mean cost over all inputs
-		return totalCost / inputsNumber; // mean cost over all inputs
 	}
 
 	void backPropagation(
@@ -241,7 +244,7 @@ public:
 
 		if (verbose) {
 			cout << "dC_dZ_L:" << endl;
-			printMatrix<parameters_t>(dC_dZ_L, 1, outputSize);
+			printMatrix<parameters_t>(dC_dZ_L, outputSize, inputsNumber);
 		}
 
 		GLuint dC_dW_ssbo, dC_db_ssbo, W_ssbo, b_ssbo;
@@ -305,7 +308,7 @@ public:
 
 			if (verbose) {
 				cout << "dC_dZ_previous :" << endl;
-				printMatrix<parameters_t>(dC_dZ_previous, inputsNumber, neuronsPerLayer.at(layer - 1));
+				printMatrix<parameters_t>(dC_dZ_previous, neuronsPerLayer.at(layer - 1), inputsNumber);
 			}
 
 			glDeleteBuffers(1, &dC_dZ_ssbo);

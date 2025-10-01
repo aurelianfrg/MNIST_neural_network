@@ -6,19 +6,19 @@ const uint vectorSize = %VS%;
 const uint sampleSize = %SS%;
 
 layout(std430, binding = 0) buffer InputMat {
-    float input_mat[vectorSize][sampleSize];
+    float dC_dZ[sampleSize][vectorSize];
 };
 
 layout(std430, binding = 1) buffer Output {
-    float output_vec[vectorSize];
+    float dC_db[vectorSize];
 };
 
 void main() {
     uint row = gl_GlobalInvocationID.x;
     float sum = 0.0;
     for (int sampleNumber = 0; sampleNumber < sampleSize; ++sampleNumber) {
-        sum += input_mat[row][sampleNumber];
+        sum += dC_dZ[sampleNumber][row];
     }
-    output_vec[row] = sum;
+    dC_db[row] = sum;
 
 }

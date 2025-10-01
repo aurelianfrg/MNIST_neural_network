@@ -23,6 +23,16 @@ void printMnistDigit(uint8_t* img, int size) {
 		}
 }
 
+void MNIST_neural_network_training() {
+
+    // Setup MNIST dataset to be a valid input for the neural network : a contiguous array of floats or double
+    mnist::MNIST_dataset<uint8_t, uint8_t> reader = mnist::read_dataset<uint8_t, uint8_t>();
+
+    const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
+
+
+}
+
 int main()
 {
     const GLuint width_right = 2;
@@ -44,17 +54,17 @@ int main()
 
 	// --- test neural network ---
 	
-    const unsigned int inputSize = 15;
+    const unsigned int inputSize = 3;
     const unsigned int inputNumber = 2;
 
     float input_img[inputNumber *inputSize] = {
-        0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.85, 0.6, 0.7, 0.8, 0.3, 0.4,
-        0.8, 0.9, 0.85, 0.6, 0.7, 0.8, 0.3, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.3, 0.4
+        0.1, 0.8, 0.9,
+        0.8, 0.1, 0.2
 	};
 	
     // for each layer, number of columns (width) must match size of input (number of pixels for first layer / previous number of neurons)
 	// and number of rows (height) is the number of neurons in the layer
-    vector<unsigned int> neuronsPerLayer({ 10, 3 });
+    vector<unsigned int> neuronsPerLayer({ 3, 3 });
     NeuralNetwork<float> nn(2, neuronsPerLayer, inputSize);
 
     cout << "Neural Network initialized:" << endl;
@@ -71,16 +81,16 @@ int main()
     cout << endl;
 
 	float learningRate = 0.1f;
-    float expected[3] = { 1.0f, 0.0f, 0.0f };
-	nn.backPropagation(expected, input_img, 1, learningRate);
-
-
+    float expected[inputNumber*3] = { 
+        1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f
+    };
 
     // real training
-    nn.train(input_img, expected, 1, 1000, 0.1);
-	cout << "Neural Network after training:" << nn << endl;
-
-    
+	nn.setVerbose(true);
+    nn.train(input_img, expected, inputNumber, 1, learningRate);
+	cout << "Neural Network after training:" << endl << nn << endl;
+        
     cout << endl;
 	return 0;
 }

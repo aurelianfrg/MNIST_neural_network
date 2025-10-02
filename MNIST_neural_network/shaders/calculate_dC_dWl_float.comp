@@ -7,11 +7,11 @@ const uint previousNeurons = %PN%;
 const uint sampleSize = %SS%;
 
 layout(std430, binding = 0) buffer Input1 {
-    float dC_dZl[sampleSize][neurons];
+    float dC_dZl[neurons][sampleSize];
 };
 
 layout(std430, binding = 1) buffer Input2 {
-    float Al_previous[sampleSize][previousNeurons];
+    float Al_previous[previousNeurons][sampleSize];
 };
 
 layout(std430, binding = 2) buffer Output {
@@ -26,7 +26,7 @@ void main() {
 
     float sum = 0.0;
     for (int sample_number = 0; sample_number < sampleSize; sample_number++) {
-        sum += dC_dZl[sample_number][neuron] * Al_previous[sample_number][previousNeuron];
+        sum += dC_dZl[neuron][sample_number] * Al_previous[previousNeuron][sample_number];
     }
     dC_dWl[neuron][previousNeuron] = sum;
 }

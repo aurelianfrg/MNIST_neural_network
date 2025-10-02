@@ -25,7 +25,7 @@ protected:
 
 	vector<GLuint> cachedLayersOutputsSsbos;	//cached outputs of each layer (state of every neuron) to be used during backpropagation
 
-	bool verbose;							//whether to print debug information during feedforward and backpropagation
+	bool verbose;								//whether to print debug information during feedforward and backpropagation
 
 
 public:
@@ -124,7 +124,7 @@ public:
 		parameters_t *activated, *weighted, *biased;
 
 		// apply weights to input
-		matrix_mult<parameters_t>(layersWeights[0], input, ssboWeighted, inputSize, neuronsPerLayer.at(0), sampleSize);
+		matrix_mult<parameters_t>(layersWeights[0], input, ssboWeighted, neuronsPerLayer.at(0), inputSize, sampleSize);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
 		weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
@@ -192,27 +192,29 @@ public:
 		return output;
 	}
 
-	parameters_t loss(parameters_t* predicted, parameters_t* expected) {
+	parameters_t loss(parameters_t* predicted, parameters_t* expected, unsigned int inputsStride) {
 		// binary cross-entropy loss function
 		// input vectors are expected to be of the same size as the output layer
 		int vectorSize = neuronsPerLayer.back();
 		parameters_t totalLoss = 0.0;
 
 		for (int i = 0; i < vectorSize; ++i) {
-			parameters_t singleOutputLoss = -(expected[i] * log(predicted[i]) + (1 - expected[i]) * log(1 - predicted[i]));
+			parameters_t singleOutputLoss = -(expected[i* inputsStride] * log(predicted[i* inputsStride]) + (1 - expected[i* inputsStride]) * log(1 - predicted[i* inputsStride]));
 			totalLoss += singleOutputLoss;
 		}
 		return totalLoss / vectorSize; 
 	}
 
 	parameters_t cost(parameters_t* predicted, parameters_t* expected, unsigned int inputsNumber) {
-		int vectorSize = neuronsPerLayer.back();
 		parameters_t totalCost = 0.0;	
 
+		// output and expected are matrices with one column per input
+		// this means that the values for input input_rank start at index input_rank and are spaced by inputsNumber
+
 		for (int input_rank = 0; input_rank < inputsNumber; ++input_rank) {
-			parameters_t* predicted_vector = &predicted[input_rank * vectorSize];
-			parameters_t* expected_vector = &expected[input_rank * vectorSize];
-			totalCost += loss(predicted_vector, expected_vector);
+			parameters_t* predicted_vector = &predicted[input_rank];
+			parameters_t* expected_vector = &expected[input_rank];
+			totalCost += loss(predicted_vector, expected_vector, inputsNumber);
 		}
 		return totalCost / inputsNumber; // mean cost over all inputs
 	}
@@ -228,6 +230,13 @@ public:
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.back());
 		parameters_t* A_L = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 		int outputSize = neuronsPerLayer.back();
+
+		if (verbose) {
+			cout << "A_L:" << endl;
+			printMatrix<parameters_t>(A_L, inputsNumber, outputSize);
+			cout << "Expected:" << endl;
+			printMatrix<parameters_t>(expected, inputsNumber, outputSize);
+		}
 
 		parameters_t cost = this->cost(A_L, expected, inputsNumber);
 		cout << "Cost: " << cost << endl;

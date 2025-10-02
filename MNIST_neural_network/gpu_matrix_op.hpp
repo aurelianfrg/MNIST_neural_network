@@ -39,7 +39,7 @@ void assign_variable(string & src, const char* var_symbol, T value) {
 
 
 template <typename T>
-void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, GLuint height_left, unsigned int common_length, unsigned int width_right) {
+void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, unsigned int height_left, unsigned int common_length, unsigned int width_right) {
 	// multiply input square matrices mat1 and mat2 of given size using OpenGL compute shader
 	// result is stored in the buffer object ssboResult
 
@@ -484,10 +484,10 @@ void printMatrix(T* mat, int width, int height) {
         for (int j = 0; j < width; ++j) {
             // printing one less digit if negative
             if (mat[i * width + j] < 0) {
-                std::cout << std::fixed << std::setprecision(1) << mat[i * width + j] << " ";
+                std::cout << std::fixed << std::setprecision(2) << mat[i * width + j] << " ";
             }
             else {
-                std::cout << std::fixed << std::setprecision(2) << mat[i * width + j] << " ";
+                std::cout << std::fixed << std::setprecision(3) << mat[i * width + j] << " ";
             }
             
         }

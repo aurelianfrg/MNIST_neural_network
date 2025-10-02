@@ -6,7 +6,7 @@ const uint vectorSize = %VS%;
 const uint sampleSize = %SS%;
 
 layout(std430, binding = 0) buffer InputMat {
-    float dC_dZ[sampleSize][vectorSize];
+    float dC_dZ[vectorSize][sampleSize];
 };
 
 layout(std430, binding = 1) buffer Output {
@@ -17,7 +17,7 @@ void main() {
     uint row = gl_GlobalInvocationID.x;
     float sum = 0.0;
     for (int sampleNumber = 0; sampleNumber < sampleSize; ++sampleNumber) {
-        sum += dC_dZ[sampleNumber][row];
+        sum += dC_dZ[row][sampleNumber];
     }
     dC_db[row] = sum;
 

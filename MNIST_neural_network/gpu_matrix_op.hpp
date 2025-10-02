@@ -47,14 +47,14 @@ void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, unsigned int height_left
     GLuint ssboMat1, ssboMat2;
     glGenBuffers(1, &ssboMat1);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat1);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height_left * common_length, mat1, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height_left * common_length, mat1, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboMat1);
     /*cout << "Matrix 1:" << endl;
     printMatrix<T>(mat1, common_length, height_left);*/
 
     glGenBuffers(1, &ssboMat2);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat2);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * common_length * width_right, mat2, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * common_length * width_right, mat2, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboMat2);
 	/*cout << "Matrix 2:" << endl;
 	printMatrix<T>(mat2, width_right, common_length); */
@@ -105,12 +105,12 @@ void matrix_add(T* mat1, T* mat2, GLuint ssboResult, unsigned int width, unsigne
     GLuint ssboMat1, ssboMat2;
     glGenBuffers(1, &ssboMat1);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat1);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat1, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat1, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboMat1);
 
     glGenBuffers(1, &ssboMat2);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat2);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat2, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat2, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboMat2);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
@@ -158,12 +158,12 @@ void matrix_add_constant_vec(T* mat1, T* vec, GLuint ssboResult, unsigned int wi
     GLuint ssboMat1, ssboMat2;
     glGenBuffers(1, &ssboMat1);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat1);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat1, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat1, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboMat1);
 
     glGenBuffers(1, &ssboMat2);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat2);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height, vec, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height, vec, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboMat2);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
@@ -210,7 +210,7 @@ void sigmoid_activation(T* input, GLuint ssboResult, unsigned int vectorSize, un
     GLuint ssboInput;
     glGenBuffers(1, &ssboInput);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboInput);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * vectorSize * sampleSize, input, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * vectorSize * sampleSize, input, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboInput);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
@@ -255,12 +255,12 @@ void calculate_dC_dZL_BCE_sigmoid(float* A_L, float* Y, GLuint ssboResult, unsig
     GLuint ssboA, ssboY;
     glGenBuffers(1, &ssboA);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboA);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, A_L, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, A_L, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboA);
 
     glGenBuffers(1, &ssboY);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboY);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, Y, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, Y, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboY);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
@@ -390,7 +390,7 @@ void update_parameters(T* weights, GLuint dC_dWl_ssbo, GLuint ssboResult, unsign
     GLuint ssboW;
     glGenBuffers(1, &ssboW);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboW);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * previous_neurons * neurons, weights, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * previous_neurons * neurons, weights, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboW);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, dC_dWl_ssbo);

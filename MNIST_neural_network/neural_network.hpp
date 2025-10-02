@@ -196,10 +196,11 @@ public:
 		// binary cross-entropy loss function
 		// input vectors are expected to be of the same size as the output layer
 		int vectorSize = neuronsPerLayer.back();
+		const float epsilon = 0.0; // small value to avoid log(0)
 		parameters_t totalLoss = 0.0;
 
 		for (int i = 0; i < vectorSize; ++i) {
-			parameters_t singleOutputLoss = -(expected[i* inputsStride] * log(predicted[i* inputsStride]) + (1 - expected[i* inputsStride]) * log(1 - predicted[i* inputsStride]));
+			parameters_t singleOutputLoss = -(expected[i* inputsStride] * log(predicted[i* inputsStride] + epsilon) + (1 - expected[i* inputsStride]) * log(1 - predicted[i* inputsStride] + epsilon));
 			totalLoss += singleOutputLoss;
 		}
 		return totalLoss / vectorSize; 
@@ -329,7 +330,7 @@ public:
 		GLuint ssbo_input;
 		glGenBuffers(1, &ssbo_input);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_input);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(parameters_t) * inputSize * inputsNumber, input, GL_STATIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(parameters_t) * inputSize * inputsNumber, input, GL_DYNAMIC_DRAW);
 		calculate_dC_dWl<parameters_t>(dC_dZ_ssbo, ssbo_input, dC_dW_ssbo, neuronsPerLayer.at(0), inputSize, inputsNumber);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dW_ssbo);
 		parameters_t* dC_dW = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
@@ -355,6 +356,7 @@ public:
 		glDeleteBuffers(1, &dC_db_ssbo);
 		glDeleteBuffers(1, &W_ssbo);
 		glDeleteBuffers(1, &b_ssbo);
+		glDeleteBuffers(1, &ssbo_input);
 	}
 
 	void train(

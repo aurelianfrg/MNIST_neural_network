@@ -18,7 +18,7 @@ void printMnistDigit(uint8_t* img, int size) {
             }
         }
         cout << endl;
-		}
+	}
 }
 
 float* setup_dataset(vector<vector<uint8_t>> & raw_set, const unsigned int inputSize, const unsigned int inputsNumber) {
@@ -56,7 +56,7 @@ void MNIST_neural_network_training() {
     mnist::MNIST_dataset<uint8_t, uint8_t> reader = mnist::read_dataset<uint8_t, uint8_t>();
 
     const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
-    const unsigned int inputsNumber = 10000;
+    const unsigned int inputsNumber = 2;
 
     //visualisation
     printMnistDigit(reader.training_images[0].data(), 28);
@@ -68,19 +68,49 @@ void MNIST_neural_network_training() {
 
     float* training_set = setup_dataset(reader.training_images, inputSize, inputsNumber);
     float* labels = setup_labels(reader.training_labels, inputsNumber);
+	float* single_input = setup_dataset(reader.training_images, inputSize, 1);
+	float* single_label = setup_labels(reader.training_labels, 1);
+
+	printMatrix<float>(training_set, inputsNumber, inputSize);
+	printMatrix<float>(labels, inputsNumber, 10);
 
     // setup the neural network    
+    vector<unsigned int> neuronsPerLayer({ 10, 10 });
+    NeuralNetwork<float> nn(2, neuronsPerLayer, inputSize);
+	cout << "Neural Network initialized:" << endl;
+	cout << nn << endl;
+	//nn.setVerbose(true);
 
+    // test on a single input
+	vector<float> output = nn.feedForward(single_input, 1, inputSize);
+	cout << "Neural Network output for a single input before training:" << endl;
+	printMatrix<float>(output.data(), 1, 10);
+	cout << "Expected output:" << endl;
+	printMatrix<float>(single_label, 1, 10);
 
+	// train the neural network
+	nn.train(training_set, labels, inputsNumber, 5000, 0.1f);
 
+    // test on a single input after training
+    output = nn.feedForward(single_input, 1, inputSize);
+    cout << "Neural Network output for a single input after training:" << endl;
+    printMatrix<float>(output.data(), 1, 10);
+    cout << "Expected output:" << endl;
+	printMatrix<float>(single_label, 1, 10);
+
+	delete[] single_input;
+	delete[] single_label;
     delete[] labels;
     delete[] training_set;
 }
 
+
+
+
 void tests() {
     // --- test neural network ---
 
-    const unsigned int inputSize = 3;
+    const unsigned int inputSize = 784;
     const unsigned int outputSize = 2;
     const unsigned int inputNumber = 2;
 
@@ -109,33 +139,36 @@ void tests() {
     }*/
     cout << endl;
 
-    float learningRate = 0.02f;
+    float learningRate = 0.1f;
     float expected[inputNumber * 2] = {
         1.0f, 0.0f,
         0.0f, 1.0f
     };
 
     // real training
-    //nn.setVerbose(true);
-    nn.train(input, expected, inputNumber, 2000, learningRate);
+    // nn.setVerbose(true);
+    nn.train(input, expected, inputNumber, 100, learningRate);
     cout << "Neural Network after training:" << endl << nn << endl;
 
-    vector<float> finalAnswer = nn.feedForward(input, 2, 3);
+    vector<float> finalAnswer = nn.feedForward(input, 2, inputSize);
     cout << "Neural Network output after training:" << endl;
     printMatrix<float>(finalAnswer.data(), inputNumber, outputSize);
 
     cout << endl;
 }
 
+
+
+
+
 int main()
 {
-
     // --- Initialize GLFW + OpenGL ---
     init_gl();
 
-
+    // main algorithm
+    //tests();
     MNIST_neural_network_training();
-    
 	
 	return 0;
 }
@@ -143,3 +176,10 @@ int main()
 
 // TODO : store all data in gl buffers to avoid cpu-gpu transfers
 // TODO : coherence of height and width parameters in functions (sometimes swapped)
+
+
+
+
+
+
+

@@ -56,7 +56,7 @@ void MNIST_neural_network_training() {
     mnist::MNIST_dataset<uint8_t, uint8_t> reader = mnist::read_dataset<uint8_t, uint8_t>();
 
     const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
-    const unsigned int inputsNumber = 2;
+    const unsigned int inputsNumber = 10;
 
     //visualisation
     printMnistDigit(reader.training_images[0].data(), 28);
@@ -71,14 +71,14 @@ void MNIST_neural_network_training() {
 	float* single_input = setup_dataset(reader.training_images, inputSize, 1);
 	float* single_label = setup_labels(reader.training_labels, 1);
 
-	printMatrix<float>(training_set, inputsNumber, inputSize);
-	printMatrix<float>(labels, inputsNumber, 10);
+	//printMatrix<float>(training_set, inputsNumber, inputSize);
+	//printMatrix<float>(labels, inputsNumber, 10);
 
     // setup the neural network    
-    vector<unsigned int> neuronsPerLayer({ 10, 10 });
-    NeuralNetwork<float> nn(2, neuronsPerLayer, inputSize);
-	cout << "Neural Network initialized:" << endl;
-	cout << nn << endl;
+    vector<unsigned int> neuronsPerLayer({ 100, 50, 10 });
+    NeuralNetwork<float> nn(3, neuronsPerLayer, inputSize);
+	//cout << "Neural Network initialized:" << endl;
+	//cout << nn << endl;
 	//nn.setVerbose(true);
 
     // test on a single input
@@ -89,14 +89,14 @@ void MNIST_neural_network_training() {
 	printMatrix<float>(single_label, 1, 10);
 
 	// train the neural network
-	nn.train(training_set, labels, inputsNumber, 5000, 0.1f);
+	nn.train(training_set, labels, inputsNumber, 500, 0.1f);
 
     // test on a single input after training
-    output = nn.feedForward(single_input, 1, inputSize);
+    output = nn.feedForward(training_set, 10, inputSize);
     cout << "Neural Network output for a single input after training:" << endl;
-    printMatrix<float>(output.data(), 1, 10);
+    printMatrix<float>(output.data(), 10, 10);
     cout << "Expected output:" << endl;
-	printMatrix<float>(single_label, 1, 10);
+	printMatrix<float>(single_label, 10, 10);
 
 	delete[] single_input;
 	delete[] single_label;

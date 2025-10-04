@@ -82,6 +82,11 @@ public:
 		}
 	}
 
+	NeuralNetwork(const NeuralNetwork& nn) {
+		cerr << "Unauthorized copy of Object of type NeuralNetwork" << endl;
+		exit(-1);
+	}
+
 	void setVerbose(bool v) {
 		verbose = v;
 	}
@@ -200,7 +205,7 @@ public:
 		// binary cross-entropy loss function
 		// input vectors are expected to be of the same size as the output layer
 		int vectorSize = neuronsPerLayer.back();
-		const float epsilon = 0.0; // small value to avoid log(0)
+		const float epsilon = 1e-10; // small value to avoid log(0)
 		parameters_t totalLoss = 0.0;
 
 		for (int i = 0; i < vectorSize; ++i) {
@@ -384,6 +389,99 @@ public:
 			cout << endl << " !!! - Warning: cost increased at some point during training. Consider reducing the learning rate. - !!!" << endl;
 			this->costIncreased = false;
 		}
+	}
+
+	bool dumpParameters(string filename = string("auto")) {
+		// Dump Neural Network state as a binary file 
+		
+		// process filename
+		string selectedFilename;
+		if (filename.compare(string("auto")) == 0) {
+			selectedFilename = genAutoDumpFilename();
+		}
+		else {
+			selectedFilename = filename;
+		}
+
+		// open output file
+		ofstream ofs(selectedFilename, ios::binary);
+		if (!ofs) {
+			cerr << "Error opening file for writing: " << filename << endl;
+			return false;
+		}
+		clog << "Dumping NeuralNetwork state in file : " << selectedFilename << endl;
+
+
+		// write headers : layersNumber, inputSize, neuronsPerLayer
+		ofs.write((char*)&layersNumber, sizeof(layersNumber));
+		ofs.write((char*)&inputSize, sizeof(inputSize));
+		for (unsigned int n : neuronsPerLayer) {
+			ofs.write((char*)&n, sizeof(n));
+		}
+		// write weights and bias
+		for (int i = 0; i < layersNumber; ++i) {
+			unsigned int weightsSize = (i == 0) ? inputSize * neuronsPerLayer.at(0) : neuronsPerLayer.at(i - 1) * neuronsPerLayer.at(i);
+			ofs.write((char*)layersWeights.at(i), sizeof(parameters_t) * weightsSize);
+		}
+		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
+			unsigned int biasSize = neuronsPerLayer.at(i);
+			ofs.write((char*)layersBias.at(i), sizeof(parameters_t) * biasSize);
+		}
+		ofs.close();
+		return true;
+	}
+
+	bool loadParameters(const string& filename) {
+		// load weights and bias from a binary file
+		ifstream ifs(filename, ios::binary);
+		if (!ifs) {
+			cerr << "Error opening file for reading: " << filename << endl;
+			return false;
+		}
+		unsigned int fileLayersNumber;
+		ifs.read((char*)&fileLayersNumber, sizeof(fileLayersNumber));
+		if (fileLayersNumber != layersNumber) {
+			cerr << "Error: file layers number does not match neural network layers number" << endl;
+			ifs.close();
+			return false;
+		}
+		unsigned int fileInputSize;
+		ifs.read((char*)&fileInputSize, sizeof(fileInputSize));
+		if (fileInputSize != inputSize) {
+			cerr << "Error: file input size does not match neural network input size" << endl;
+			ifs.close();
+			return false;
+		}
+		for (unsigned int n : neuronsPerLayer) {
+			unsigned int fileN;
+			ifs.read((char*)&fileN, sizeof(fileN));
+			if (fileN != n) {
+				cerr << "Error: file neurons per layer does not match neural network neurons per layer" << endl;
+				ifs.close();
+				return false;
+			}
+		}
+		for (int i = 0; i < layersNumber; ++i) {
+			unsigned int weightsSize = (i == 0) ? inputSize * neuronsPerLayer.at(0) : neuronsPerLayer.at(i - 1) * neuronsPerLayer.at(i);
+			ifs.read((char*)layersWeights.at(i), sizeof(parameters_t) * weightsSize);
+		}
+		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
+			unsigned int biasSize = neuronsPerLayer.at(i);
+			ifs.read((char*)layersBias.at(i), sizeof(parameters_t) * biasSize);
+		}
+		ifs.close();
+		return true;
+	}
+
+	string genAutoDumpFilename() {
+		stringstream ss;
+		ss << "NeuralNetworkDumpFile" << "_l" << layersNumber << "_i" << inputSize;
+		for (unsigned int n : neuronsPerLayer) {
+			ss << "_" << n;
+		}
+		ss << ".nn";
+		string filename = ss.str();
+		return filename;
 	}
 };
 

@@ -51,17 +51,17 @@ float* setup_labels(vector<uint8_t> raw_labels, const unsigned int inputsNumber)
     return labels;
 }
 
-void MNIST_neural_network_training() {
+NeuralNetwork<float> * MNIST_neural_network_training() {
 
     // Setup MNIST dataset
     mnist::MNIST_dataset<uint8_t, uint8_t> reader = mnist::read_dataset<uint8_t, uint8_t>();
 
     const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
 	const unsigned int outputSize = 10;     // size of output layer = number of possible digits
-    const unsigned int trainingInputsNumber = 1000;
+    const unsigned int trainingInputsNumber = 200;
 	const unsigned int testInputsNumber = 100;
-	const float learningRate = 0.2f;
-	const unsigned int epochs = 800;
+	const float learningRate = 0.5f;
+	const unsigned int epochs = 10;
 
 
 	// to be used as input to the neural network, the rows must represent the pixels of an image and the columns the different images
@@ -74,18 +74,18 @@ void MNIST_neural_network_training() {
 	float* test_labels = setup_labels(reader.test_labels, testInputsNumber);
 
     // setup the neural network    
-    vector<unsigned int> neuronsPerLayer({ 784, 784, 50, outputSize });
-    NeuralNetwork<float> nn(4, neuronsPerLayer, inputSize);
+    vector<unsigned int> neuronsPerLayer({ 784, 50, outputSize });
+    NeuralNetwork<float> * nn = new NeuralNetwork<float>(3, neuronsPerLayer, inputSize);
 
 	// train the neural network
-	nn.train(training_set, training_labels, trainingInputsNumber, epochs, learningRate);
+	nn->train(training_set, training_labels, trainingInputsNumber, epochs, learningRate);
 
     // test after training
-    vector<float> output = nn.feedForward(training_set, trainingInputsNumber, inputSize);
+    vector<float> output = nn->feedForward(training_set, trainingInputsNumber, inputSize);
     float rate = conformRate(output.data(), training_labels, trainingInputsNumber, outputSize);
     cout << "Neural Network conform rate on training set after training (" << trainingInputsNumber << " inputs) : " << fixed << setprecision(2) << rate * 100 << "%" << endl;
 
-	output = nn.feedForward(test_set, testInputsNumber, inputSize);
+	output = nn->feedForward(test_set, testInputsNumber, inputSize);
 	rate = conformRate(output.data(), test_labels, testInputsNumber, outputSize);
     cout << "Neural Network conform rate on test set after training (" << testInputsNumber << " inputs) : " << fixed << setprecision(2) << rate * 100 << "%" << endl;
 
@@ -93,7 +93,7 @@ void MNIST_neural_network_training() {
     printMnistDigit(reader.test_images[0].data(), 28);
     cout << "Label: " << int(reader.test_labels[0]) << endl;
 	float* single_input = setup_dataset(reader.test_images, inputSize, 1);
-    vector<float> single_output = nn.feedForward(single_input, 1, inputSize);
+    vector<float> single_output = nn->feedForward(single_input, 1, inputSize);
     cout << "Neural Network output for this image :" << endl;
     printMatrix<float>(single_output.data(), 1, outputSize);
 
@@ -103,6 +103,8 @@ void MNIST_neural_network_training() {
 	delete[] test_labels;
     delete[] training_labels;
     delete[] training_set;
+
+    return nn;
 }
 
 
@@ -193,8 +195,10 @@ int main()
 
     // main algorithm
     //tests();
-    MNIST_neural_network_training();
+    NeuralNetwork<float> * nn = MNIST_neural_network_training();
+    nn->dumpParameters();
 	
+    delete nn;
 	return 0;
 }
 

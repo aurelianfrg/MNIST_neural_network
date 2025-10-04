@@ -17,7 +17,7 @@ float* setup_dataset(vector<vector<uint8_t>>& raw_set, const unsigned int inputS
 float* setup_labels(vector<uint8_t> raw_labels, const unsigned int inputsNumber);
     // to be used to train the neural network, labels must be presented as bitmaps of size 10 with a single bit being at 1 : the bit of rank equal to the digit value
 
-void MNIST_neural_network_training();
+NeuralNetwork<float> * MNIST_neural_network_training();
 
 float conformRate(const float* output, const float* expected, const unsigned int inputsNumber, const unsigned int outputSize);
 

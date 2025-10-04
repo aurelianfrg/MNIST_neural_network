@@ -53,15 +53,15 @@ float* setup_labels(vector<uint8_t> raw_labels, const unsigned int inputsNumber)
 
 void MNIST_neural_network_training() {
 
-    // Setup MNIST dataset to be a valid input for the neural network : a contiguous array of floats or double
+    // Setup MNIST dataset
     mnist::MNIST_dataset<uint8_t, uint8_t> reader = mnist::read_dataset<uint8_t, uint8_t>();
 
     const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
 	const unsigned int outputSize = 10;     // size of output layer = number of possible digits
-    const unsigned int trainingInputsNumber = 50;
+    const unsigned int trainingInputsNumber = 1000;
 	const unsigned int testInputsNumber = 100;
-	const float learningRate = 0.01f;
-	const unsigned int epochs = 600;
+	const float learningRate = 0.2f;
+	const unsigned int epochs = 800;
 
 
 	// to be used as input to the neural network, the rows must represent the pixels of an image and the columns the different images
@@ -74,8 +74,8 @@ void MNIST_neural_network_training() {
 	float* test_labels = setup_labels(reader.test_labels, testInputsNumber);
 
     // setup the neural network    
-    vector<unsigned int> neuronsPerLayer({ 100, 50, outputSize });
-    NeuralNetwork<float> nn(3, neuronsPerLayer, inputSize);
+    vector<unsigned int> neuronsPerLayer({ 784, 784, 50, outputSize });
+    NeuralNetwork<float> nn(4, neuronsPerLayer, inputSize);
 
 	// train the neural network
 	nn.train(training_set, training_labels, trainingInputsNumber, epochs, learningRate);

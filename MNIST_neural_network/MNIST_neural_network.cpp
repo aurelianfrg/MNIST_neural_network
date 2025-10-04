@@ -4,6 +4,7 @@
 #include "mnist_reader_less.hpp"
 #include "gpu_matrix_op.hpp"
 #include "neural_network.hpp"
+#include "MNIST_neural_network.hpp"
 
 using namespace std;
 
@@ -56,55 +57,79 @@ void MNIST_neural_network_training() {
     mnist::MNIST_dataset<uint8_t, uint8_t> reader = mnist::read_dataset<uint8_t, uint8_t>();
 
     const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
-    const unsigned int inputsNumber = 10;
+	const unsigned int outputSize = 10;     // size of output layer = number of possible digits
+    const unsigned int trainingInputsNumber = 50;
+	const unsigned int testInputsNumber = 100;
+	const float learningRate = 0.01f;
+	const unsigned int epochs = 600;
 
-    //visualisation
-    printMnistDigit(reader.training_images[0].data(), 28);
-    cout << "Label: " << int(reader.training_labels[0]) << endl;
 
 	// to be used as input to the neural network, the rows must represent the pixels of an image and the columns the different images
 	// using row-major storage, we need to transpose the dataset
     // this means that in memory, all the first pixels of each image will be stored in a row, then the second pixels ...
 
-    float* training_set = setup_dataset(reader.training_images, inputSize, inputsNumber);
-    float* labels = setup_labels(reader.training_labels, inputsNumber);
-	float* single_input = setup_dataset(reader.training_images, inputSize, 1);
-	float* single_label = setup_labels(reader.training_labels, 1);
-
-	//printMatrix<float>(training_set, inputsNumber, inputSize);
-	//printMatrix<float>(labels, inputsNumber, 10);
+    float* training_set = setup_dataset(reader.training_images, inputSize, trainingInputsNumber);
+    float* training_labels = setup_labels(reader.training_labels, trainingInputsNumber);
+	float* test_set = setup_dataset(reader.test_images, inputSize, testInputsNumber);
+	float* test_labels = setup_labels(reader.test_labels, testInputsNumber);
 
     // setup the neural network    
-    vector<unsigned int> neuronsPerLayer({ 100, 50, 10 });
+    vector<unsigned int> neuronsPerLayer({ 100, 50, outputSize });
     NeuralNetwork<float> nn(3, neuronsPerLayer, inputSize);
-	//cout << "Neural Network initialized:" << endl;
-	//cout << nn << endl;
-	//nn.setVerbose(true);
-
-    // test on a single input
-	vector<float> output = nn.feedForward(single_input, 1, inputSize);
-	cout << "Neural Network output for a single input before training:" << endl;
-	printMatrix<float>(output.data(), 1, 10);
-	cout << "Expected output:" << endl;
-	printMatrix<float>(single_label, 1, 10);
 
 	// train the neural network
-	nn.train(training_set, labels, inputsNumber, 500, 0.1f);
+	nn.train(training_set, training_labels, trainingInputsNumber, epochs, learningRate);
 
-    // test on a single input after training
-    output = nn.feedForward(training_set, 10, inputSize);
-    cout << "Neural Network output for a single input after training:" << endl;
-    printMatrix<float>(output.data(), 10, 10);
-    cout << "Expected output:" << endl;
-	printMatrix<float>(single_label, 10, 10);
+    // test after training
+    vector<float> output = nn.feedForward(training_set, trainingInputsNumber, inputSize);
+    float rate = conformRate(output.data(), training_labels, trainingInputsNumber, outputSize);
+    cout << "Neural Network conform rate on training set after training (" << trainingInputsNumber << " inputs) : " << fixed << setprecision(2) << rate * 100 << "%" << endl;
 
-	delete[] single_input;
-	delete[] single_label;
-    delete[] labels;
+	output = nn.feedForward(test_set, testInputsNumber, inputSize);
+	rate = conformRate(output.data(), test_labels, testInputsNumber, outputSize);
+    cout << "Neural Network conform rate on test set after training (" << testInputsNumber << " inputs) : " << fixed << setprecision(2) << rate * 100 << "%" << endl;
+
+    //visualisation
+    printMnistDigit(reader.test_images[0].data(), 28);
+    cout << "Label: " << int(reader.test_labels[0]) << endl;
+	float* single_input = setup_dataset(reader.test_images, inputSize, 1);
+    vector<float> single_output = nn.feedForward(single_input, 1, inputSize);
+    cout << "Neural Network output for this image :" << endl;
+    printMatrix<float>(single_output.data(), 1, outputSize);
+
+	// cleanup
+    delete[] single_input;
+	delete[] test_set;
+	delete[] test_labels;
+    delete[] training_labels;
     delete[] training_set;
 }
 
 
+float conformRate(const float* output, const float* expected, const unsigned int inputsNumber, const unsigned int outputSize) {
+    int conformCount = 0;
+    for (int input_rank = 0; input_rank < inputsNumber; ++input_rank) {
+        // find the index of the maximum value in output and expected
+        int maxOutputIndex = 0;
+        int maxExpectedIndex = 0;
+        float maxOutputValue = output[input_rank];
+        float maxExpectedValue = expected[input_rank];
+        for (int i = 1; i < outputSize; ++i) {
+            if (output[input_rank + i * inputsNumber] > maxOutputValue) {
+                maxOutputValue = output[input_rank + i * inputsNumber];
+                maxOutputIndex = i;
+            }
+            if (expected[input_rank + i * inputsNumber] > maxExpectedValue) {
+                maxExpectedValue = expected[input_rank + i * inputsNumber];
+                maxExpectedIndex = i;
+            }
+        }
+        if (maxOutputIndex == maxExpectedIndex) {
+            conformCount++;
+        }
+    }
+    return float(conformCount) / inputsNumber;
+}
 
 
 void tests() {
@@ -175,7 +200,7 @@ int main()
 
 
 // TODO : store all data in gl buffers to avoid cpu-gpu transfers
-// TODO : coherence of height and width parameters in functions (sometimes swapped)
+// TODO : coherence of height and width parameters in functions (sometimes swapped) : standard is height first then width
 
 
 

@@ -26,6 +26,8 @@ protected:
 	vector<GLuint> cachedLayersOutputsSsbos;	//cached outputs of each layer (state of every neuron) to be used during backpropagation
 
 	bool verbose;								//whether to print debug information during feedforward and backpropagation
+	parameters_t lastCost;
+	bool costIncreased;							//used to print a warning at the end of training to warn that the learning rate might be too high
 
 
 public:
@@ -62,6 +64,8 @@ public:
 		this->random_init(1729);
 
 		verbose = false;
+		lastCost = FLT_MAX;
+		costIncreased = false;
 	}
 
 	~NeuralNetwork() {
@@ -240,7 +244,12 @@ public:
 		}
 
 		parameters_t cost = this->cost(A_L, expected, inputsNumber);
-		cout << "Cost: " << cost << endl;
+		cout << "Cost: " << std::fixed << std::setprecision(3) << cost << endl; // print cost to monitor training
+
+		if (cost > this->lastCost) {
+			this->costIncreased = true;
+		}
+		this->lastCost = cost;
 
 
 		// --- Cost gradient computation ---
@@ -370,6 +379,10 @@ public:
 		for (int e = 0; e < epochs; ++e) {
 			feedForward(training_set, inputsNumber, this->inputSize);
 			backPropagation(labels, training_set, inputsNumber, learningRate);
+		}
+		if (this->costIncreased) {
+			cout << endl << " !!! - Warning: cost increased at some point during training. Consider reducing the learning rate. - !!!" << endl;
+			this->costIncreased = false;
 		}
 	}
 };

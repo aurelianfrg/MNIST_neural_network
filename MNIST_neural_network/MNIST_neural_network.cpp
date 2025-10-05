@@ -1,6 +1,5 @@
 ﻿// MNIST_neural_network.cpp : définit le point d'entrée de l'application.
 
-
 #include "mnist_reader_less.hpp"
 #include "gpu_matrix_op.hpp"
 #include "neural_network.hpp"
@@ -58,10 +57,12 @@ NeuralNetwork<float> * MNIST_neural_network_training() {
 
     const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
 	const unsigned int outputSize = 10;     // size of output layer = number of possible digits
-    const unsigned int trainingInputsNumber = 200;
-	const unsigned int testInputsNumber = 100;
-	const float learningRate = 0.5f;
-	const unsigned int epochs = 10;
+    const unsigned int trainingInputsNumber = 60000;    // max 60000
+	const unsigned int testInputsNumber = 10000;        // max 10000
+	const float learningRate = 0.1f;
+	const unsigned int epochs = 100;
+    vector<unsigned int> neuronsPerLayer({ 100, 100, 100, outputSize });
+    const unsigned int layersNumber = neuronsPerLayer.size();
 
 
 	// to be used as input to the neural network, the rows must represent the pixels of an image and the columns the different images
@@ -74,8 +75,7 @@ NeuralNetwork<float> * MNIST_neural_network_training() {
 	float* test_labels = setup_labels(reader.test_labels, testInputsNumber);
 
     // setup the neural network    
-    vector<unsigned int> neuronsPerLayer({ 784, 50, outputSize });
-    NeuralNetwork<float> * nn = new NeuralNetwork<float>(3, neuronsPerLayer, inputSize);
+    NeuralNetwork<float> * nn = new NeuralNetwork<float>(layersNumber, neuronsPerLayer, inputSize);
 
 	// train the neural network
 	nn->train(training_set, training_labels, trainingInputsNumber, epochs, learningRate);
@@ -133,7 +133,6 @@ float conformRate(const float* output, const float* expected, const unsigned int
     return float(conformCount) / inputsNumber;
 }
 
-
 void tests() {
     // --- test neural network ---
 
@@ -184,6 +183,34 @@ void tests() {
     cout << endl;
 }
 
+void importExternalNeuralNetwork() {
+
+    string dumpFilename = "NeuralNetworkDumpFile_l3_i784_784_50_10.nn";
+
+    NeuralNetwork<float> nn_copy(dumpFilename);
+    cout << nn_copy << endl;
+}
+
+NeuralNetwork<float>* loadAndTest(string filename) {
+    const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
+    const unsigned int outputSize = 10;     // size of output layer = number of possible digits
+    const unsigned int testInputsNumber = 2000;
+
+
+    NeuralNetwork<float>* loadedNN = new NeuralNetwork<float>(filename);
+    cout << "Successfully loaded " << filename << endl;
+    cout << *loadedNN << endl;
+
+    mnist::MNIST_dataset<uint8_t, uint8_t> reader = mnist::read_dataset<uint8_t, uint8_t>();
+    float* test_set = setup_dataset(reader.test_images, inputSize, testInputsNumber);
+    float* test_labels = setup_labels(reader.test_labels, testInputsNumber);
+
+    vector<float> output = loadedNN->feedForward(test_set, testInputsNumber, inputSize);
+    float rate = conformRate(output.data(), test_labels, testInputsNumber, outputSize);
+    cout << "Neural Network conform rate on test set after training (" << testInputsNumber << " inputs) : " << fixed << setprecision(2) << rate * 100 << "%" << endl;
+
+    return loadedNN;
+}
 
 
 
@@ -193,17 +220,25 @@ int main()
     // --- Initialize GLFW + OpenGL ---
     init_gl();
 
-    // main algorithm
-    //tests();
+
+    // main processing
+
+    
     NeuralNetwork<float> * nn = MNIST_neural_network_training();
-    nn->dumpParameters();
-	
+    nn->dumpParameters();	
+    cout << (*nn);
+    
+
+    //string filename = "nn_states/NeuralNetworkDumpFile_l3_i784_784_784_10.nn";
+    //loadAndTest(filename);
+    
+
     delete nn;
 	return 0;
 }
 
 
-// TODO : store all data in gl buffers to avoid cpu-gpu transfers
+// TODO : store all data in gl buffers to avoid cpu-gpu transfers, including training set data, maybe in a static buffer if it fits
 // TODO : coherence of height and width parameters in functions (sometimes swapped) : standard is height first then width
 
 

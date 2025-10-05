@@ -23,6 +23,10 @@ float conformRate(const float* output, const float* expected, const unsigned int
 
 void tests();
 
+void importExternalNeuralNetwork();
+
+NeuralNetwork<float>* loadAndTrain();
+NeuralNetwork<float>* loadAndTest(string filename);
 
 // TODO : store all data in gl buffers to avoid cpu-gpu transfers
 // TODO : coherence of height and width parameters in functions (sometimes swapped)

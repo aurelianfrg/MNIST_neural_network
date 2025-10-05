@@ -28,6 +28,32 @@ protected:
 	bool verbose;								//whether to print debug information during feedforward and backpropagation
 	parameters_t lastCost;
 	bool costIncreased;							//used to print a warning at the end of training to warn that the learning rate might be too high
+	unsigned int trainingEpochs = 0;				//keeping track of training epochs
+
+
+	void random_init(int seed) {
+		//initialize weights and bias with random values between -1 and 1
+
+		srand(seed);
+
+		for (int neuron_rank = 0; neuron_rank < inputSize * neuronsPerLayer.at(0); ++neuron_rank) {
+			parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
+			layersWeights[0][neuron_rank] = rand_value;
+		}
+		for (int i = 1; i < layersNumber; ++i) { // fill each layer
+			for (int neuron_rank = 0; neuron_rank < neuronsPerLayer.at(i - 1) * neuronsPerLayer.at(i); ++neuron_rank) {
+				parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
+				layersWeights[i][neuron_rank] = rand_value;
+			}
+		}
+
+		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
+			for (int neuron_rank = 0; neuron_rank < neuronsPerLayer.at(i); ++neuron_rank) {
+				parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
+				layersBias[i][neuron_rank] = rand_value;
+			}
+		}
+	}
 
 
 public:
@@ -66,6 +92,7 @@ public:
 		verbose = false;
 		lastCost = FLT_MAX;
 		costIncreased = false;
+		trainingEpochs = 0;
 	}
 
 	~NeuralNetwork() {
@@ -87,40 +114,93 @@ public:
 		exit(-1);
 	}
 
-	void setVerbose(bool v) {
-		verbose = v;
-	}
+	NeuralNetwork(const string& filename) {
+	//initialize a NeuralNetwork with a file containing a saved state
 
-	void random_init(int seed) {
-		//initialize weights and bias with random values between 0 and 1
+		ifstream ifs(filename, ios::binary);
+		if (!ifs) {
+			cerr << "Error opening file for reading: " << filename << endl;
+			throw runtime_error("");
+		}
 
-		srand(seed);
+		// reading layersNumber
+		unsigned int fileLayersNumber;
+		ifs.read((char*)&fileLayersNumber, sizeof(fileLayersNumber));
+		if (fileLayersNumber > 100) {
+			cerr << "Error: file layers number is bigger than 100" << endl;
+			ifs.close();
+			throw runtime_error("");
+		}
+		this->layersNumber = fileLayersNumber;
+		this->layersBias.resize(layersNumber);
+		this->layersWeights.resize(layersNumber);
+		this->cachedLayersOutputsSsbos.resize(layersNumber); 
+		this->neuronsPerLayer.resize(layersNumber);
 		
-		for (int neuron_rank = 0; neuron_rank < inputSize * neuronsPerLayer.at(0); ++neuron_rank) {
-			parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
-			layersWeights[0][neuron_rank] = rand_value;
+		// reading inputSize
+		unsigned int fileInputSize;
+		ifs.read((char*)&fileInputSize, sizeof(fileInputSize));
+		if (fileInputSize > 1000000) {
+			cerr << "Error: file input size is bigger than 1000000" << endl;
+			ifs.close();
+			throw runtime_error("");
 		}
-		for (int i = 1; i < layersNumber; ++i) { // fill each layer
-			for (int neuron_rank = 0; neuron_rank < neuronsPerLayer.at(i-1) * neuronsPerLayer.at(i); ++neuron_rank) {
-				parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
-				layersWeights[i][neuron_rank] = rand_value;
+		this->inputSize = fileInputSize;
+
+		unsigned int filetrainingEpochs;
+		ifs.read((char*)&filetrainingEpochs, sizeof(filetrainingEpochs));
+		this->inputSize = filetrainingEpochs;
+
+		//reading neuronsPerLayer
+		for (int i = 0; i < this->layersNumber; ++i) {
+			unsigned int fileN;
+			ifs.read((char*)&fileN, sizeof(fileN));
+			if (fileN > 1000000) {
+				cerr << "Error: neurons count is bigger than 1000000" << endl;
+				ifs.close();
+				throw runtime_error("");
 			}
+			this->neuronsPerLayer.at(i) = fileN;
 		}
 
-		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
-			for (int neuron_rank = 0; neuron_rank < neuronsPerLayer.at(i); ++neuron_rank) {
-				parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
-				layersBias[i][neuron_rank] = rand_value;
-			}
+		// reading weights values
+		for (int i = 0; i < layersNumber; ++i) {
+			unsigned int weightsSize = (i == 0) ? inputSize * neuronsPerLayer.at(0) : neuronsPerLayer.at(i - 1) * neuronsPerLayer.at(i);
+			this->layersWeights.at(i) = new parameters_t[weightsSize];
+			ifs.read((char*)layersWeights.at(i), sizeof(parameters_t) * weightsSize);
 		}
+		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
+			unsigned int biasSize = neuronsPerLayer.at(i);
+			this->layersBias.at(i) = new parameters_t[biasSize];
+			ifs.read((char*)layersBias.at(i), sizeof(parameters_t) * biasSize);
+		}
+		ifs.close();
+
+		// set the remainder attributes to default values
+		
+		//create as many ssbo as layers to cache the outputs of each layer
+		for (int i = 0; i < layersNumber; ++i) {
+			GLuint ssbo;
+			glGenBuffers(1, &ssbo);
+			cachedLayersOutputsSsbos.at(i) = ssbo;
+		}
+		verbose = false;
+		lastCost = FLT_MAX;
+		costIncreased = false;
+		trainingEpochs = 0;
 	}
+
+	void setVerbose(bool v) {
+		this->verbose = v;
+	}
+
 
 	vector<parameters_t> feedForward(
 		parameters_t* input,		// input matrix containing one column per input
 		unsigned int sampleSize,	// number of inputs (number of columns of the input matrix)
 		unsigned int vectorSize)	// size of each input (number of rows of the input matrix)
 	{
-		// feed forward the input through the neural network and return the output of the last layer
+	// feed forward the input through the neural network and return the output of the last layer
 
 		// input dimension must match the input layer dimension
 		if ( vectorSize != inputSize) {
@@ -202,8 +282,8 @@ public:
 	}
 
 	parameters_t loss(parameters_t* predicted, parameters_t* expected, unsigned int inputsStride) {
-		// binary cross-entropy loss function
-		// input vectors are expected to be of the same size as the output layer
+	// binary cross-entropy loss function
+	// input vectors are expected to be of the same size as the output layer
 		int vectorSize = neuronsPerLayer.back();
 		const float epsilon = 1e-10; // small value to avoid log(0)
 		parameters_t totalLoss = 0.0;
@@ -382,8 +462,10 @@ public:
 	) 
 	{
 		for (int e = 0; e < epochs; ++e) {
+			cout << "epoch " << e << " --> ";
 			feedForward(training_set, inputsNumber, this->inputSize);
 			backPropagation(labels, training_set, inputsNumber, learningRate);
+			++trainingEpochs;
 		}
 		if (this->costIncreased) {
 			cout << endl << " !!! - Warning: cost increased at some point during training. Consider reducing the learning rate. - !!!" << endl;
@@ -392,7 +474,7 @@ public:
 	}
 
 	bool dumpParameters(string filename = string("auto")) {
-		// Dump Neural Network state as a binary file 
+	// Dump Neural Network state as a binary file 
 		
 		// process filename
 		string selectedFilename;
@@ -415,6 +497,7 @@ public:
 		// write headers : layersNumber, inputSize, neuronsPerLayer
 		ofs.write((char*)&layersNumber, sizeof(layersNumber));
 		ofs.write((char*)&inputSize, sizeof(inputSize));
+		ofs.write((char*)&trainingEpochs, sizeof(trainingEpochs);
 		for (unsigned int n : neuronsPerLayer) {
 			ofs.write((char*)&n, sizeof(n));
 		}
@@ -431,54 +514,14 @@ public:
 		return true;
 	}
 
-	bool loadParameters(const string& filename) {
-		// load weights and bias from a binary file
-		ifstream ifs(filename, ios::binary);
-		if (!ifs) {
-			cerr << "Error opening file for reading: " << filename << endl;
-			return false;
-		}
-		unsigned int fileLayersNumber;
-		ifs.read((char*)&fileLayersNumber, sizeof(fileLayersNumber));
-		if (fileLayersNumber != layersNumber) {
-			cerr << "Error: file layers number does not match neural network layers number" << endl;
-			ifs.close();
-			return false;
-		}
-		unsigned int fileInputSize;
-		ifs.read((char*)&fileInputSize, sizeof(fileInputSize));
-		if (fileInputSize != inputSize) {
-			cerr << "Error: file input size does not match neural network input size" << endl;
-			ifs.close();
-			return false;
-		}
-		for (unsigned int n : neuronsPerLayer) {
-			unsigned int fileN;
-			ifs.read((char*)&fileN, sizeof(fileN));
-			if (fileN != n) {
-				cerr << "Error: file neurons per layer does not match neural network neurons per layer" << endl;
-				ifs.close();
-				return false;
-			}
-		}
-		for (int i = 0; i < layersNumber; ++i) {
-			unsigned int weightsSize = (i == 0) ? inputSize * neuronsPerLayer.at(0) : neuronsPerLayer.at(i - 1) * neuronsPerLayer.at(i);
-			ifs.read((char*)layersWeights.at(i), sizeof(parameters_t) * weightsSize);
-		}
-		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
-			unsigned int biasSize = neuronsPerLayer.at(i);
-			ifs.read((char*)layersBias.at(i), sizeof(parameters_t) * biasSize);
-		}
-		ifs.close();
-		return true;
-	}
-
 	string genAutoDumpFilename() {
+	// generate an automatic file name describing the parameters of a NeuralNetwork, such as layers number, input size and neurons count
 		stringstream ss;
 		ss << "NeuralNetworkDumpFile" << "_l" << layersNumber << "_i" << inputSize;
 		for (unsigned int n : neuronsPerLayer) {
 			ss << "_" << n;
 		}
+		ss << "_e" << this->trainingEpochs;
 		ss << ".nn";
 		string filename = ss.str();
 		return filename;
@@ -491,19 +534,33 @@ template <typename parameters_t>
 ostream & operator <<(ostream &os, const NeuralNetwork<parameters_t> & nn) {
 	//print the neural network weights and bias
 
-	os << "Layer " << 0 << " weights:" << endl;
-	printMatrix<parameters_t>(nn.layersWeights.at(0), nn.inputSize, nn.neuronsPerLayer.at(0));
-	for (int i = 1; i < nn.layersNumber; ++i) {
-		os << "Layer " << i << " weights:" << endl;
-		printMatrix<parameters_t>(nn.layersWeights.at(i), nn.neuronsPerLayer.at(i-1), nn.neuronsPerLayer.at(i));
+	os << "-----------------------------" << endl;
+	os << "Neural Network of " << nn.layersNumber << " layers :" << endl;
+	os << "Input Size : " << nn.inputSize << endl;
+	os << "Neurons per layer : ";
+	for (int i = 0; i < nn.layersNumber; ++i) {
+		os << nn.neuronsPerLayer.at(i) << " ";
+	}
+	os << endl;
+
+	if (nn.verbose) {
+		os << "Layer " << 0 << " weights:" << endl;
+		printMatrix<parameters_t>(nn.layersWeights.at(0), nn.inputSize, nn.neuronsPerLayer.at(0));
+		for (int i = 1; i < nn.layersNumber; ++i) {
+			os << "Layer " << i << " weights:" << endl;
+			printMatrix<parameters_t>(nn.layersWeights.at(i), nn.neuronsPerLayer.at(i - 1), nn.neuronsPerLayer.at(i));
+		}
+
+		for (int i = 1; i < nn.layersNumber; ++i) { // input layer has no bias
+			os << "Layer " << i << " bias:" << endl;
+			for (int j = 0; j < nn.neuronsPerLayer.at(i); ++j) {
+				os << std::fixed << std::setprecision(2) << nn.layersBias.at(i)[j] << endl;
+			}
+			os << endl;
+		}
 	}
 
-	for (int i = 1; i < nn.layersNumber; ++i) { // input layer has no bias
-		os << "Layer " << i << " bias:" << endl;
-		for(int j = 0; j < nn.neuronsPerLayer.at(i); ++j) {
-			os << std::fixed << std::setprecision(2) << nn.layersBias.at(i)[j] << endl;
-		}
-		os << endl;
-	}
+	os << "-----------------------------" << endl;
+
 	return os;
 }

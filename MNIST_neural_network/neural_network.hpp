@@ -464,6 +464,60 @@ public:
 			this->costIncreased = false;
 		}
 	}
+
+	bool dumpParameters(string filename = string("auto")) {
+		// Dump Neural Network state as a binary file 
+
+			// process filename
+		string selectedFilename;
+		if (filename.compare(string("auto")) == 0) {
+			selectedFilename = genAutoDumpFilename();
+		}
+		else {
+			selectedFilename = filename;
+		}
+
+		// open output file
+		ofstream ofs(selectedFilename, ios::binary);
+		if (!ofs) {
+			cerr << "Error opening file for writing: " << filename << endl;
+			return false;
+		}
+		clog << "Dumping NeuralNetwork state in file : " << selectedFilename << endl;
+
+
+		// write headers : layersNumber, inputSize, neuronsPerLayer
+		ofs.write((char*)&layersNumber, sizeof(layersNumber));
+		ofs.write((char*)&inputSize, sizeof(inputSize));
+		ofs.write((char*)&trainingEpochs, sizeof(trainingEpochs);
+		for (unsigned int n : neuronsPerLayer) {
+			ofs.write((char*)&n, sizeof(n));
+		}
+		// write weights and bias
+		for (int i = 0; i < layersNumber; ++i) {
+			unsigned int weightsSize = (i == 0) ? inputSize * neuronsPerLayer.at(0) : neuronsPerLayer.at(i - 1) * neuronsPerLayer.at(i);
+			ofs.write((char*)layersWeights.at(i), sizeof(parameters_t) * weightsSize);
+		}
+		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
+			unsigned int biasSize = neuronsPerLayer.at(i);
+			ofs.write((char*)layersBias.at(i), sizeof(parameters_t) * biasSize);
+		}
+		ofs.close();
+		return true;
+	}
+
+	string genAutoDumpFilename() {
+		// generate an automatic file name describing the parameters of a NeuralNetwork, such as layers number, input size and neurons count
+		stringstream ss;
+		ss << "NeuralNetworkDumpFile" << "_l" << layersNumber << "_i" << inputSize;
+		for (unsigned int n : neuronsPerLayer) {
+			ss << "_" << n;
+		}
+		ss << "_e" << this->trainingEpochs;
+		ss << ".nn";
+		string filename = ss.str();
+		return filename;
+	}
 };
 
 

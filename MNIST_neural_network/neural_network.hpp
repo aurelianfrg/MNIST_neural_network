@@ -28,6 +28,7 @@ protected:
 	bool verbose;								//whether to print debug information during feedforward and backpropagation
 	parameters_t lastCost;
 	bool costIncreased;							//used to print a warning at the end of training to warn that the learning rate might be too high
+	unsigned int trainingEpochs;
 
 
 public:
@@ -66,6 +67,7 @@ public:
 		verbose = false;
 		lastCost = FLT_MAX;
 		costIncreased = false;
+		trainingEpochs = 0;
 	}
 
 	~NeuralNetwork() {
@@ -80,6 +82,82 @@ public:
 		for (int i = 0; i < layersNumber; ++i) {
 			glDeleteBuffers(1, &cachedLayersOutputsSsbos.at(i));
 		}
+	}
+
+	NeuralNetwork(const string& filename) {
+		//initialize a NeuralNetwork with a file containing a saved state
+
+		ifstream ifs(filename, ios::binary);
+		if (!ifs) {
+			cerr << "Error opening file for reading: " << filename << endl;
+			throw runtime_error("");
+		}
+
+		// reading layersNumber
+		unsigned int fileLayersNumber;
+		ifs.read((char*)&fileLayersNumber, sizeof(fileLayersNumber));
+		if (fileLayersNumber > 100) {
+			cerr << "Error: file layers number is bigger than 100" << endl;
+			ifs.close();
+			throw runtime_error("");
+		}
+		this->layersNumber = fileLayersNumber;
+		this->layersBias.resize(layersNumber);
+		this->layersWeights.resize(layersNumber);
+		this->cachedLayersOutputsSsbos.resize(layersNumber);
+		this->neuronsPerLayer.resize(layersNumber);
+
+		// reading inputSize
+		unsigned int fileInputSize;
+		ifs.read((char*)&fileInputSize, sizeof(fileInputSize));
+		if (fileInputSize > 1000000) {
+			cerr << "Error: file input size is bigger than 1000000" << endl;
+			ifs.close();
+			throw runtime_error("");
+		}
+		this->inputSize = fileInputSize;
+
+		unsigned int filetrainingEpochs;
+		ifs.read((char*)&filetrainingEpochs, sizeof(filetrainingEpochs));
+		this->inputSize = filetrainingEpochs;
+
+		//reading neuronsPerLayer
+		for (int i = 0; i < this->layersNumber; ++i) {
+			unsigned int fileN;
+			ifs.read((char*)&fileN, sizeof(fileN));
+			if (fileN > 1000000) {
+				cerr << "Error: neurons count is bigger than 1000000" << endl;
+				ifs.close();
+				throw runtime_error("");
+			}
+			this->neuronsPerLayer.at(i) = fileN;
+		}
+
+		// reading weights values
+		for (int i = 0; i < layersNumber; ++i) {
+			unsigned int weightsSize = (i == 0) ? inputSize * neuronsPerLayer.at(0) : neuronsPerLayer.at(i - 1) * neuronsPerLayer.at(i);
+			this->layersWeights.at(i) = new parameters_t[weightsSize];
+			ifs.read((char*)layersWeights.at(i), sizeof(parameters_t) * weightsSize);
+		}
+		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
+			unsigned int biasSize = neuronsPerLayer.at(i);
+			this->layersBias.at(i) = new parameters_t[biasSize];
+			ifs.read((char*)layersBias.at(i), sizeof(parameters_t) * biasSize);
+		}
+		ifs.close();
+
+		// set the remainder attributes to default values
+
+		//create as many ssbo as layers to cache the outputs of each layer
+		for (int i = 0; i < layersNumber; ++i) {
+			GLuint ssbo;
+			glGenBuffers(1, &ssbo);
+			cachedLayersOutputsSsbos.at(i) = ssbo;
+		}
+		verbose = false;
+		lastCost = FLT_MAX;
+		costIncreased = false;
+		trainingEpochs = 0;
 	}
 
 	void setVerbose(bool v) {
@@ -379,6 +457,7 @@ public:
 		for (int e = 0; e < epochs; ++e) {
 			feedForward(training_set, inputsNumber, this->inputSize);
 			backPropagation(labels, training_set, inputsNumber, learningRate);
+			++(this->trainingEpochs);
 		}
 		if (this->costIncreased) {
 			cout << endl << " !!! - Warning: cost increased at some point during training. Consider reducing the learning rate. - !!!" << endl;

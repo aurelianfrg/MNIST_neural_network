@@ -61,7 +61,7 @@ void MNIST_neural_network_training() {
     const unsigned int trainingInputsNumber = 1000;
 	const unsigned int testInputsNumber = 100;
 	const float learningRate = 0.2f;
-	const unsigned int epochs = 800;
+	const unsigned int epochs = 10;
 
 
 	// to be used as input to the neural network, the rows must represent the pixels of an image and the columns the different images
@@ -74,7 +74,7 @@ void MNIST_neural_network_training() {
 	float* test_labels = setup_labels(reader.test_labels, testInputsNumber);
 
     // setup the neural network    
-    vector<unsigned int> neuronsPerLayer({ 784, 784, 50, outputSize });
+    vector<unsigned int> neuronsPerLayer({ 100, 100, 100, outputSize });
     NeuralNetwork<float> nn(4, neuronsPerLayer, inputSize);
 
 	// train the neural network
@@ -96,6 +96,10 @@ void MNIST_neural_network_training() {
     vector<float> single_output = nn.feedForward(single_input, 1, inputSize);
     cout << "Neural Network output for this image :" << endl;
     printMatrix<float>(single_output.data(), 1, outputSize);
+
+
+    //saving model
+    
 
 	// cleanup
     delete[] single_input;
@@ -129,57 +133,6 @@ float conformRate(const float* output, const float* expected, const unsigned int
         }
     }
     return float(conformCount) / inputsNumber;
-}
-
-
-void tests() {
-    // --- test neural network ---
-
-    const unsigned int inputSize = 784;
-    const unsigned int outputSize = 2;
-    const unsigned int inputNumber = 2;
-
-
-    float input[inputNumber * inputSize] = {
-        0.1, 0.8,
-        0.9, 0.8,
-        0.1, 0.2
-    };
-
-    // for each layer, number of columns (width) must match size of input (number of pixels for first layer / previous number of neurons)
-    // and number of rows (height) is the number of neurons in the layer
-    vector<unsigned int> neuronsPerLayer({ 4, outputSize });
-    NeuralNetwork<float> nn(2, neuronsPerLayer, inputSize);
-
-    cout << "Neural Network initialized:" << endl;
-    cout << nn << endl;
-
-    // 1 image is a single vector of width=1 and height=width*height
-    // the width of the input matrix corresponds to the number of images
-
-    /*vector<float> output = nn.feedForward(input_img, 1, inputSize);
-    cout << "Neural Network output:" << endl;
-    for (float & val : output) {
-        cout << std::fixed << std::setprecision(2) << val << " ";
-    }*/
-    cout << endl;
-
-    float learningRate = 0.1f;
-    float expected[inputNumber * 2] = {
-        1.0f, 0.0f,
-        0.0f, 1.0f
-    };
-
-    // real training
-    // nn.setVerbose(true);
-    nn.train(input, expected, inputNumber, 100, learningRate);
-    cout << "Neural Network after training:" << endl << nn << endl;
-
-    vector<float> finalAnswer = nn.feedForward(input, 2, inputSize);
-    cout << "Neural Network output after training:" << endl;
-    printMatrix<float>(finalAnswer.data(), inputNumber, outputSize);
-
-    cout << endl;
 }
 
 

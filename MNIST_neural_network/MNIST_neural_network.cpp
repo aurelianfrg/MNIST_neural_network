@@ -60,7 +60,7 @@ NeuralNetwork<float> * MNIST_neural_network_training() {
     const unsigned int trainingInputsNumber = 60000;    // max 60000
 	const unsigned int testInputsNumber = 10000;        // max 10000
 	const float learningRate = 0.1f;
-	const unsigned int epochs = 100;
+	const unsigned int epochs = 10;
     vector<unsigned int> neuronsPerLayer({ 100, 100, 100, outputSize });
     const unsigned int layersNumber = neuronsPerLayer.size();
 

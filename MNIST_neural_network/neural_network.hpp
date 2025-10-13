@@ -497,7 +497,7 @@ public:
 		// write headers : layersNumber, inputSize, neuronsPerLayer
 		ofs.write((char*)&layersNumber, sizeof(layersNumber));
 		ofs.write((char*)&inputSize, sizeof(inputSize));
-		ofs.write((char*)&trainingEpochs, sizeof(trainingEpochs);
+		ofs.write((char*)&trainingEpochs, sizeof(trainingEpochs));
 		for (unsigned int n : neuronsPerLayer) {
 			ofs.write((char*)&n, sizeof(n));
 		}

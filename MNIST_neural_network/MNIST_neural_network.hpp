@@ -26,10 +26,17 @@ void tests();
 void importExternalNeuralNetwork();
 
 NeuralNetwork<float>* loadAndTrain();
-NeuralNetwork<float>* loadAndTest(string filename);
 
-// TODO : store all data in gl buffers to avoid cpu-gpu transfers
-// TODO : coherence of height and width parameters in functions (sometimes swapped)
+
+// generic commands
+
+NeuralNetwork<float>* createMnistNeuralNetwork(vector<unsigned int> neuronsPerLayer);
+NeuralNetwork<float>* loadNeuralNetwork(string filename);
+
+void testNeuralNetwork(NeuralNetwork<float>* nn, float* testDataset, float* testLabels, unsigned int testInputsNumber);
+void trainNeuralNetwork(NeuralNetwork<float>* nn, float* trainingDataset, unsigned int trainingInputsNumber, float learningRate, unsigned int epochs);
+
+void saveNeuralNetwork(string filename = string("auto"));
 
 
 

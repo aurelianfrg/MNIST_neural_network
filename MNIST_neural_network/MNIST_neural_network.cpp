@@ -57,10 +57,10 @@ NeuralNetwork<float> * MNIST_neural_network_training() {
 
     const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
 	const unsigned int outputSize = 10;     // size of output layer = number of possible digits
-    const unsigned int trainingInputsNumber = 60000;    // max 60000
-	const unsigned int testInputsNumber = 10000;        // max 10000
+    const unsigned int trainingInputsNumber = 600;    // max 60000
+	const unsigned int testInputsNumber = 100;        // max 10000
 	const float learningRate = 0.1f;
-	const unsigned int epochs = 10;
+	const unsigned int epochs = 20;
     vector<unsigned int> neuronsPerLayer({ 100, 100, 100, outputSize });
     const unsigned int layersNumber = neuronsPerLayer.size();
 
@@ -213,6 +213,32 @@ NeuralNetwork<float>* loadAndTest(string filename) {
 }
 
 
+// generic commands
+NeuralNetwork<float>* createMnistNeuralNetwork(vector<unsigned int> neuronsPerLayer) {
+
+    const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
+    const unsigned int outputSize = 10;     // size of output layer = number of possible digits
+    const unsigned int layersNumber = neuronsPerLayer.size();
+   
+    NeuralNetwork<float>* nn = new NeuralNetwork<float>(layersNumber, neuronsPerLayer, inputSize);
+
+    return nn;
+}
+
+NeuralNetwork<float>* loadNeuralNetwork(string filename) {
+    NeuralNetwork<float>* nn = new NeuralNetwork<float>(filename);
+    return nn;
+}
+
+void testNeuralNetwork(NeuralNetwork<float>* nn, float* testDataset, float* testLabels, unsigned int testInputsNumber) {
+    vector<float> output = nn->feedForward(testDataset, testInputsNumber, 28*28);
+    float rate = conformRate(output.data(), testLabels, testInputsNumber, 10);
+    cout << "Neural Network conform rate on test set (" << testInputsNumber << " inputs) : " << fixed << setprecision(2) << rate * 100 << "%" << endl;
+}
+
+void trainNeuralNetwork(NeuralNetwork<float>* nn, float* trainingDataset, unsigned int trainingInputsNumber, float learningRate, unsigned int epochs) {
+
+}
 
 
 int main()
@@ -225,7 +251,7 @@ int main()
 
     
     NeuralNetwork<float> * nn = MNIST_neural_network_training();
-    nn->dumpParameters();	
+    //nn->dumpParameters();	
     cout << (*nn);
     
 

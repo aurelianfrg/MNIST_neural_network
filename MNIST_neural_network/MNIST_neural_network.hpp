@@ -23,8 +23,6 @@ float conformRate(const float* output, const float* expected, const unsigned int
 
 void tests();
 
-void importExternalNeuralNetwork();
-
 // generic commands
 
 NeuralNetwork<float>* createMnistNeuralNetwork(vector<unsigned int> neuronsPerLayer);

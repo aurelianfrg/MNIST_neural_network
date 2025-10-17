@@ -24,11 +24,14 @@ protected:
 	unsigned int inputSize;						//size of the input layer (number of inputs)
 
 	vector<GLuint> cachedLayersOutputsSsbos;	//cached outputs of each layer (state of every neuron) to be used during backpropagation
+	GLuint cachedTrainingDataSsbo;
 
-	bool verbose;								//whether to print debug information during feedforward and backpropagation
+	bool verbose = false;								//whether to print debug information during feedforward and backpropagation
 	parameters_t lastCost;
-	bool costIncreased;							//used to print a warning at the end of training to warn that the learning rate might be too high
-	unsigned int trainingEpochs = 0;				//keeping track of training epochs
+	bool costIncreased = false;							//used to print a warning at the end of training to warn that the learning rate might be too high
+	unsigned int trainingEpochs = 0;			//keeping track of training epochs
+	bool trainingDataIsCached = false;
+
 
 
 	void random_init(int seed) {
@@ -93,7 +96,9 @@ public:
 		lastCost = FLT_MAX;
 		costIncreased = false;
 		trainingEpochs = 0;
+		glGenBuffers(1, &cachedTrainingDataSsbo);
 	}
+
 
 	~NeuralNetwork() {
 		//deallocating weights layers and bias layers
@@ -109,10 +114,12 @@ public:
 		}
 	}
 
+
 	NeuralNetwork(const NeuralNetwork& nn) {
 		cerr << "Unauthorized copy of Object of type NeuralNetwork" << endl;
 		exit(-1);
 	}
+
 
 	NeuralNetwork(const string& filename) {
 	//initialize a NeuralNetwork with a file containing a saved state
@@ -188,7 +195,9 @@ public:
 		lastCost = FLT_MAX;
 		costIncreased = false;
 		trainingEpochs = 0;
+		glGenBuffers(1, &cachedTrainingDataSsbo);
 	}
+
 
 	void setVerbose(bool v) {
 		this->verbose = v;
@@ -213,7 +222,12 @@ public:
 		parameters_t *activated, *weighted, *biased;
 
 		// apply weights to input
-		matrix_mult<parameters_t>(layersWeights[0], input, ssboWeighted, neuronsPerLayer.at(0), inputSize, sampleSize);
+		if (trainingDataIsCached) {
+			matrix_mult<parameters_t>(layersWeights[0], cachedTrainingDataSsbo, ssboWeighted, neuronsPerLayer.at(0), inputSize, sampleSize);
+		}
+		else {
+			matrix_mult<parameters_t>(layersWeights[0], input, ssboWeighted, neuronsPerLayer.at(0), inputSize, sampleSize);
+		}
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
 		weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
@@ -453,6 +467,7 @@ public:
 		glDeleteBuffers(1, &ssbo_input);
 	}
 
+
 	void train(
 		parameters_t * training_set,	// contiguously allocated inputs for training (each must be of inputSize)
 		parameters_t * labels,			// contiguously allocated labels (each must match the size of the output layer)
@@ -461,6 +476,12 @@ public:
 		parameters_t learningRate
 	) 
 	{
+		if (!trainingDataIsCached) {
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->cachedTrainingDataSsbo);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, this->inputSize * inputsNumber * sizeof(parameters_t), training_set, GL_STATIC_DRAW);
+			trainingDataIsCached = true;
+		}
+
 		for (int e = 0; e < epochs; ++e) {
 			cout << "epoch " << e << " --> ";
 			feedForward(training_set, inputsNumber, this->inputSize);
@@ -471,7 +492,10 @@ public:
 			cout << endl << " !!! - Warning: cost increased at some point during training. Consider reducing the learning rate. - !!!" << endl;
 			this->costIncreased = false;
 		}
+
+		trainingDataIsCached = false;
 	}
+
 
 	bool dumpParameters(string filename = string("auto")) {
 	// Dump Neural Network state as a binary file 
@@ -513,6 +537,7 @@ public:
 		ofs.close();
 		return true;
 	}
+
 
 	string genAutoDumpFilename() {
 	// generate an automatic file name describing the parameters of a NeuralNetwork, such as layers number, input size and neurons count

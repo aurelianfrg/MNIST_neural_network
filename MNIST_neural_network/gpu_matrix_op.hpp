@@ -95,6 +95,55 @@ void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, unsigned int height_left
 
 }
 
+template <typename T>
+void matrix_mult(T* mat1, GLuint mat2Ssbo, GLuint ssboResult, unsigned int height_left, unsigned int common_length, unsigned int width_right) {
+    // multiply input square matrices mat1 and mat2 of given size using OpenGL compute shader
+    // result is stored in the buffer object ssboResult
+
+    // --- Buffers ---
+    GLuint ssboMat1;
+    glGenBuffers(1, &ssboMat1);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat1);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height_left * common_length, mat1, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboMat1);
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, mat2Ssbo);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height_left * width_right, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        src = loadShaderSource("shaders/matrix_mult_double.comp");
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/matrix_mult_float.comp");
+    }
+    else {
+        cerr << "matrix_add: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%HL%", height_left);
+    assign_variable<GLuint>(src, "%CL%", common_length);
+    assign_variable<GLuint>(src, "%WR%", width_right);
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(height_left, width_right, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
+    glDeleteBuffers(1, &ssboMat1);
+    glDeleteProgram(program);
+
+}
+
 
 template <typename T>
 void matrix_add(T* mat1, T* mat2, GLuint ssboResult, unsigned int width, unsigned int height) {

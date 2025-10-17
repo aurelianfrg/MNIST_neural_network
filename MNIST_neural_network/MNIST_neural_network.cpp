@@ -232,11 +232,11 @@ int main()
 
     const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
     const unsigned int outputSize = 10;     // size of output layer = number of possible digits
-    const unsigned int trainingInputsNumber = 1000;    // max 60000
+    const unsigned int trainingInputsNumber = 10000;    // max 60000
     const unsigned int testInputsNumber = 10000;        // max 10000
-    const float learningRate = 0.5f;
-    const unsigned int epochs = 200;
-    vector<unsigned int> neuronsPerLayer({ 784, 100, 100, 100, outputSize });
+    const float learningRate = 0.2f;
+    const unsigned int epochs = 100;
+    vector<unsigned int> neuronsPerLayer({ 784, 100, outputSize });
     const unsigned int layersNumber = neuronsPerLayer.size();
 
     float* training_set = setup_dataset(reader.training_images, inputSize, trainingInputsNumber);
@@ -255,19 +255,10 @@ int main()
     if (trainModel) {
         trainNeuralNetwork(nn, training_set, training_labels, trainingInputsNumber, learningRate, epochs);
     }
-    testNeuralNetwork(nn, training_set, training_labels, testInputsNumber);
+    testNeuralNetwork(nn, test_set, test_labels, testInputsNumber);
     if (trainModel) {
         saveNeuralNetwork(nn);
     }
-
-    
-    //NeuralNetwork<float> * nn = MNIST_neural_network_training();
-    //nn->dumpParameters();	
-    //cout << (*nn);
-    
-
-    //string filename = "nn_states/NeuralNetworkDumpFile_l3_i784_784_784_10.nn";
-    //loadAndTest(filename);
     
 
     delete nn;

@@ -219,9 +219,9 @@ void saveNeuralNetwork(NeuralNetwork<float>* nn, string filename) {
 int main()
 {
     // options 
-    bool loadModel = false;
-    bool trainModel = true;
-    string modelPath = "";
+    bool loadModel = true;
+    bool trainModel = false;
+    string modelPath = "nn_states/NeuralNetworkDumpFile_l5_i784_200_200_200_100_10_e500.nn";
 
     // --- Initialize GLFW + OpenGL ---
     init_gl();
@@ -232,11 +232,11 @@ int main()
 
     const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
     const unsigned int outputSize = 10;     // size of output layer = number of possible digits
-    const unsigned int trainingInputsNumber = 10000;    // max 60000
+    const unsigned int trainingInputsNumber = 60000;    // max 60000
     const unsigned int testInputsNumber = 10000;        // max 10000
     const float learningRate = 0.2f;
-    const unsigned int epochs = 100;
-    vector<unsigned int> neuronsPerLayer({ 784, 100, outputSize });
+    const unsigned int epochs = 1;
+    vector<unsigned int> neuronsPerLayer({ 200, 200, 200, 100, outputSize });
     const unsigned int layersNumber = neuronsPerLayer.size();
 
     float* training_set = setup_dataset(reader.training_images, inputSize, trainingInputsNumber);
@@ -251,6 +251,7 @@ int main()
     }
     else {
         nn = loadNeuralNetwork(modelPath);
+        cout << *nn << endl;
     }
     if (trainModel) {
         trainNeuralNetwork(nn, training_set, training_labels, trainingInputsNumber, learningRate, epochs);

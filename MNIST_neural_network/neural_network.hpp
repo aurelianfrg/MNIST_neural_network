@@ -158,7 +158,7 @@ public:
 
 		unsigned int filetrainingEpochs;
 		ifs.read((char*)&filetrainingEpochs, sizeof(filetrainingEpochs));
-		this->inputSize = filetrainingEpochs;
+		this->trainingEpochs = filetrainingEpochs;
 
 		//reading neuronsPerLayer
 		for (int i = 0; i < this->layersNumber; ++i) {
@@ -222,7 +222,6 @@ public:
 		GLuint ssboWeighted, ssboBiased;
 		glGenBuffers(1, &ssboWeighted);
 		glGenBuffers(1, &ssboBiased);
-		parameters_t *activated, *weighted, *biased;
 
 		// apply weights to input
 		if (trainingDataIsCached) {
@@ -234,7 +233,7 @@ public:
 		
 		if (verbose) {
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
-			weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+			parameters_t* weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 			cout << "After weights multiplication:" << endl;
 			printMatrix<parameters_t>(weighted, sampleSize, neuronsPerLayer.at(0));
 			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
@@ -245,7 +244,7 @@ public:
 
 		if (verbose) {
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(0));
-			activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+			parameters_t* activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 			cout << "After activation:" << endl;
 			printMatrix<parameters_t>(activated, sampleSize, neuronsPerLayer.at(0));
 			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
@@ -258,38 +257,40 @@ public:
 			matrix_mult<parameters_t>(layersWeights[layer], cachedLayersOutputsSsbos.at(layer-1), ssboWeighted, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer-1), sampleSize);
 			
 			if (verbose) {
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
+				parameters_t* weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+				glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 				cout << "After weights multiplication:" << endl;
 				printMatrix<parameters_t>(weighted, sampleSize, neuronsPerLayer.at(layer));
-				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
-				weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
-				glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+				
 			}
 
 			// add bias
 			matrix_add_constant_vec<parameters_t>(ssboWeighted, layersBias[layer], ssboBiased, sampleSize, neuronsPerLayer.at(layer));
 			
 			if (verbose) {
-				cout << "After bias addition:" << endl;
-				printMatrix<parameters_t>(biased, sampleSize, neuronsPerLayer.at(layer));
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboBiased);
-				biased = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+				parameters_t* biased = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 				glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+				cout << "After bias addition:" << endl;
+				printMatrix<parameters_t>(biased, sampleSize, neuronsPerLayer.at(layer));	
 			}
 
 			//apply activation to input
 			sigmoid_activation<parameters_t>(ssboBiased, cachedLayersOutputsSsbos.at(layer), neuronsPerLayer.at(layer), sampleSize);
 
 			if (verbose) {
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(layer));
+				parameters_t* activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+				glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 				cout << "After activation:" << endl;
 				printMatrix<parameters_t>(activated, sampleSize, neuronsPerLayer.at(layer));
-				glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(layer));
-				activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
-				glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+				
 			}
 		}
 
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(layersNumber-1));
-		activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+		parameters_t* activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
 		// there are "sampleSize" outputs (= as many as inputs) and they are of the same size as the number of neurons in the last layer
 		vector<parameters_t> output(sampleSize * neuronsPerLayer.back());
@@ -493,7 +494,7 @@ public:
 		}
 
 		for (int e = 0; e < epochs; ++e) {
-			cout << "epoch " << e << " --> ";
+			cout << "epoch " << trainingEpochs << " --> ";
 			feedForward(training_set, inputsNumber, this->inputSize);
 			backPropagation(labels, training_set, inputsNumber, learningRate);
 			++trainingEpochs;
@@ -544,6 +545,7 @@ public:
 			unsigned int biasSize = neuronsPerLayer.at(i);
 			ofs.write((char*)layersBias.at(i), sizeof(parameters_t) * biasSize);
 		}
+
 		ofs.close();
 		return true;
 	}

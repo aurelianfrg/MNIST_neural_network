@@ -183,35 +183,6 @@ void tests() {
     cout << endl;
 }
 
-void importExternalNeuralNetwork() {
-
-    string dumpFilename = "NeuralNetworkDumpFile_l3_i784_784_50_10.nn";
-
-    NeuralNetwork<float> nn_copy(dumpFilename);
-    cout << nn_copy << endl;
-}
-
-NeuralNetwork<float>* loadAndTest(string filename) {
-    const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
-    const unsigned int outputSize = 10;     // size of output layer = number of possible digits
-    const unsigned int testInputsNumber = 2000;
-
-
-    NeuralNetwork<float>* loadedNN = new NeuralNetwork<float>(filename);
-    cout << "Successfully loaded " << filename << endl;
-    cout << *loadedNN << endl;
-
-    mnist::MNIST_dataset<uint8_t, uint8_t> reader = mnist::read_dataset<uint8_t, uint8_t>();
-    float* test_set = setup_dataset(reader.test_images, inputSize, testInputsNumber);
-    float* test_labels = setup_labels(reader.test_labels, testInputsNumber);
-
-    vector<float> output = loadedNN->feedForward(test_set, testInputsNumber, inputSize);
-    float rate = conformRate(output.data(), test_labels, testInputsNumber, outputSize);
-    cout << "Neural Network conform rate on test set after training (" << testInputsNumber << " inputs) : " << fixed << setprecision(2) << rate * 100 << "%" << endl;
-
-    return loadedNN;
-}
-
 
 // generic commands
 NeuralNetwork<float>* createMnistNeuralNetwork(vector<unsigned int> neuronsPerLayer) {
@@ -236,23 +207,63 @@ void testNeuralNetwork(NeuralNetwork<float>* nn, float* testDataset, float* test
     cout << "Neural Network conform rate on test set (" << testInputsNumber << " inputs) : " << fixed << setprecision(2) << rate * 100 << "%" << endl;
 }
 
-void trainNeuralNetwork(NeuralNetwork<float>* nn, float* trainingDataset, unsigned int trainingInputsNumber, float learningRate, unsigned int epochs) {
+void trainNeuralNetwork(NeuralNetwork<float>* nn, float* trainingDataset, float* labels, unsigned int trainingInputsNumber, float learningRate, unsigned int epochs) {
+    nn->train(trainingDataset, labels, trainingInputsNumber, epochs, learningRate);
+}
 
+void saveNeuralNetwork(NeuralNetwork<float>* nn, string filename) {
+    nn->dumpParameters(filename);
 }
 
 
 int main()
 {
+    // options 
+    bool loadModel = false;
+    bool trainModel = true;
+    string modelPath = "";
+
     // --- Initialize GLFW + OpenGL ---
     init_gl();
 
+    //setup dataset
+    mnist::MNIST_dataset<uint8_t, uint8_t> reader = mnist::read_dataset<uint8_t, uint8_t>();
+
+
+    const unsigned int inputSize = 28 * 28; // size of input layer = number of pixels in an image
+    const unsigned int outputSize = 10;     // size of output layer = number of possible digits
+    const unsigned int trainingInputsNumber = 1000;    // max 60000
+    const unsigned int testInputsNumber = 10000;        // max 10000
+    const float learningRate = 0.5f;
+    const unsigned int epochs = 200;
+    vector<unsigned int> neuronsPerLayer({ 784, 100, 100, 100, outputSize });
+    const unsigned int layersNumber = neuronsPerLayer.size();
+
+    float* training_set = setup_dataset(reader.training_images, inputSize, trainingInputsNumber);
+    float* training_labels = setup_labels(reader.training_labels, trainingInputsNumber);
+    float* test_set = setup_dataset(reader.test_images, inputSize, testInputsNumber);
+    float* test_labels = setup_labels(reader.test_labels, testInputsNumber);
 
     // main processing
+    NeuralNetwork<float>* nn;
+    if (! loadModel) {
+        nn = createMnistNeuralNetwork(neuronsPerLayer);
+    }
+    else {
+        nn = loadNeuralNetwork(modelPath);
+    }
+    if (trainModel) {
+        trainNeuralNetwork(nn, training_set, training_labels, trainingInputsNumber, learningRate, epochs);
+    }
+    testNeuralNetwork(nn, training_set, training_labels, testInputsNumber);
+    if (trainModel) {
+        saveNeuralNetwork(nn);
+    }
 
     
-    NeuralNetwork<float> * nn = MNIST_neural_network_training();
+    //NeuralNetwork<float> * nn = MNIST_neural_network_training();
     //nn->dumpParameters();	
-    cout << (*nn);
+    //cout << (*nn);
     
 
     //string filename = "nn_states/NeuralNetworkDumpFile_l3_i784_784_784_10.nn";
@@ -260,6 +271,10 @@ int main()
     
 
     delete nn;
+    delete[] test_set;
+    delete[] test_labels;
+    delete[] training_labels;
+    delete[] training_set;
 	return 0;
 }
 

@@ -25,18 +25,15 @@ void tests();
 
 void importExternalNeuralNetwork();
 
-NeuralNetwork<float>* loadAndTrain();
-
-
 // generic commands
 
 NeuralNetwork<float>* createMnistNeuralNetwork(vector<unsigned int> neuronsPerLayer);
 NeuralNetwork<float>* loadNeuralNetwork(string filename);
 
 void testNeuralNetwork(NeuralNetwork<float>* nn, float* testDataset, float* testLabels, unsigned int testInputsNumber);
-void trainNeuralNetwork(NeuralNetwork<float>* nn, float* trainingDataset, unsigned int trainingInputsNumber, float learningRate, unsigned int epochs);
+void trainNeuralNetwork(NeuralNetwork<float>* nn, float* trainingDataset, float* labels, unsigned int trainingInputsNumber, float learningRate, unsigned int epochs);
 
-void saveNeuralNetwork(string filename = string("auto"));
+void saveNeuralNetwork(NeuralNetwork<float>* nn, string filename = string("auto"));
 
 
 

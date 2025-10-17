@@ -199,21 +199,21 @@ void matrix_add(T* mat1, T* mat2, GLuint ssboResult, unsigned int width, unsigne
 
 
 template <typename T>
-void matrix_add_constant_vec(T* mat1, T* vec, GLuint ssboResult, unsigned int width, unsigned int height) {
+void matrix_add_constant_vec(T* mat, T* vec, GLuint ssboResult, unsigned int width, unsigned int height) {
     // add input square matrices mat1 and mat2 of given size using OpenGL compute shader
     // result is stored in the buffer object ssboResult
 
     // --- Buffers ---
-    GLuint ssboMat1, ssboMat2;
-    glGenBuffers(1, &ssboMat1);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat1);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat1, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboMat1);
+    GLuint matSsbo, vecSsbo;
+    glGenBuffers(1, &matSsbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, matSsbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, mat, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, matSsbo);
 
-    glGenBuffers(1, &ssboMat2);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboMat2);
+    glGenBuffers(1, &vecSsbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, vecSsbo);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height, vec, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboMat2);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vecSsbo);
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
     glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, nullptr, GL_DYNAMIC_READ);
@@ -245,11 +245,64 @@ void matrix_add_constant_vec(T* mat1, T* vec, GLuint ssboResult, unsigned int wi
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     auto end = std::chrono::steady_clock::now();
 
-    glDeleteBuffers(1, &ssboMat1);
-    glDeleteBuffers(1, &ssboMat2);
+    glDeleteBuffers(1, &matSsbo);
+    glDeleteBuffers(1, &vecSsbo);
     glDeleteProgram(program);
 
 }
+
+
+
+template <typename T>
+void matrix_add_constant_vec(GLuint matSsbo, T* vec, GLuint ssboResult, unsigned int width, unsigned int height) {
+    // add input square matrices mat1 and mat2 of given size using OpenGL compute shader
+    // result is stored in the buffer object ssboResult
+
+    // --- Buffers ---
+    GLuint vecSsbo;
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, matSsbo);
+
+    glGenBuffers(1, &vecSsbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, vecSsbo);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * height, vec, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, vecSsbo);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * width * height, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        src = loadShaderSource("shaders/matrix_add_constant_vec_double.comp");
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/matrix_add_constant_vec_float.comp");
+    }
+    else {
+        cerr << "matrix_add_constant_vec: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%H%", height);
+    assign_variable<GLuint>(src, "%W%", width);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(height, width, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
+    glDeleteBuffers(1, &vecSsbo);
+    glDeleteProgram(program);
+
+}
+
 
 
 template <typename T>
@@ -293,6 +346,45 @@ void sigmoid_activation(T* input, GLuint ssboResult, unsigned int vectorSize, un
     auto end = std::chrono::steady_clock::now();
 
     glDeleteBuffers(1, &ssboInput);
+    glDeleteProgram(program);
+}
+
+template <typename T>
+void sigmoid_activation(GLuint inputSsbo, GLuint ssboResult, unsigned int vectorSize, unsigned int sampleSize) {
+
+    // --- Buffers ---
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, inputSsbo);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * vectorSize * sampleSize, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        src = loadShaderSource("shaders/sigmoid_activation_double.comp");
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/sigmoid_activation_float.comp");
+    }
+    else {
+        cerr << "sigmoid_activation: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%VS%", vectorSize);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    auto start = std::chrono::steady_clock::now();
+    glDispatchCompute(sampleSize, vectorSize, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    auto end = std::chrono::steady_clock::now();
+
     glDeleteProgram(program);
 }
 

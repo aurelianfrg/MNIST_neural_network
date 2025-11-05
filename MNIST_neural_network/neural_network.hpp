@@ -196,7 +196,6 @@ public:
 		verbose = false;
 		lastCost = FLT_MAX;
 		costIncreased = false;
-		trainingEpochs = 0;
 		glGenBuffers(1, &cachedTrainingDataSsbo);
 		glGenBuffers(1, &cachedTrainingLabelsSsbo);
 	}

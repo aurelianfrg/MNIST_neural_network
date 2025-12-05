@@ -30,7 +30,7 @@ protected:
 	bool verbose = false;								//whether to print debug information during feedforward and backpropagation
 	parameters_t lastCost;
 	bool costIncreased = false;							//used to print a warning at the end of training to warn that the learning rate might be too high
-	unsigned int trainingEpochs = 0;			//keeping track of training epochs
+	unsigned int trainingEpochs;			//keeping track of training epochs
 	bool trainingDataIsCached = false;
 
 
@@ -196,7 +196,6 @@ public:
 		verbose = false;
 		lastCost = FLT_MAX;
 		costIncreased = false;
-		trainingEpochs = 0;
 		glGenBuffers(1, &cachedTrainingDataSsbo);
 		glGenBuffers(1, &cachedTrainingLabelsSsbo);
 	}

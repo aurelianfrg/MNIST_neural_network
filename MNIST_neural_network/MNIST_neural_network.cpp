@@ -220,8 +220,8 @@ int main()
 {
     // options 
     bool loadModel = true;
-    bool trainModel = false;
-    string modelPath = "nn_states/NeuralNetworkDumpFile_l5_i784_200_200_200_100_10_e500.nn";
+    bool trainModel = true;
+    string modelPath = "nn_states/NeuralNetworkDumpFile_l4_i784_200_100_100_10_e20.nn";
 
     // --- Initialize GLFW + OpenGL ---
     init_gl();
@@ -234,9 +234,9 @@ int main()
     const unsigned int outputSize = 10;     // size of output layer = number of possible digits
     const unsigned int trainingInputsNumber = 60000;    // max 60000
     const unsigned int testInputsNumber = 10000;        // max 10000
-    const float learningRate = 0.2f;
-    const unsigned int epochs = 1;
-    vector<unsigned int> neuronsPerLayer({ 200, 200, 200, 100, outputSize });
+    const float learningRate = 0.1f;
+    const unsigned int epochs = 10;
+    vector<unsigned int> neuronsPerLayer({ 200, 100, 100, outputSize });
     const unsigned int layersNumber = neuronsPerLayer.size();
 
     float* training_set = setup_dataset(reader.training_images, inputSize, trainingInputsNumber);

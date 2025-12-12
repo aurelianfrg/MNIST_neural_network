@@ -1,0 +1,35 @@
+#version 460 core
+
+layout(local_size_x = 1) in;
+
+const uint vectorSize = %VS%;
+const uint sampleSize = %SS%;
+
+layout(std430, binding = 0) buffer InputMat {
+    float input_mat[vectorSize][sampleSize];
+};
+
+layout(std430, binding = 1) buffer Output {
+    float output_mat[vectorSize][sampleSize];
+};
+
+void main() {
+    uint sampleId = gl_GlobalInvocationID.x; // dispatched over sampleSize
+    uint neuron = gl_GlobalInvocationID.y;   // dispatched over vectorSize
+
+    // Numerical stability: subtract max over neurons for this sample
+    float maxv = -3.402823e38; // approx -FLT_MAX
+    for (uint n = 0u; n < vectorSize; ++n) {
+        float v = input_mat[n][sampleId];
+        if (v > maxv) maxv = v;
+    }
+
+    float sum = 0.0;
+    for (uint n = 0u; n < vectorSize; ++n) {
+        sum += exp(input_mat[n][sampleId] - maxv);
+    }
+
+    float ex = exp(input_mat[neuron][sampleId] - maxv);
+    // safe division: sum should be > 0
+    output_mat[neuron][sampleId] = ex / sum;
+}

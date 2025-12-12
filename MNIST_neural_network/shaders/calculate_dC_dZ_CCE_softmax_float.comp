@@ -1,0 +1,27 @@
+#version 460 core
+
+layout(local_size_x = 1) in;
+
+const uint vectorSize = %VS%;
+const uint sampleSize = %SS%;
+
+layout(std430, binding = 0) buffer Input1 {
+    float A[vectorSize][sampleSize];
+};
+
+layout(std430, binding = 1) buffer Input2 {
+    float Y[vectorSize][sampleSize];
+};
+
+layout(std430, binding = 2) buffer Output {
+    float dC_dZ[vectorSize][sampleSize];
+};
+
+
+void main() {
+    uint sampleNumber = gl_GlobalInvocationID.x;
+    uint neuron = gl_GlobalInvocationID.y;
+
+    dC_dZ[neuron][sampleNumber] = (A[neuron][sampleNumber] - Y[neuron][sampleNumber]) / sampleSize;
+
+}

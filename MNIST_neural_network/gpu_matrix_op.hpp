@@ -15,6 +15,7 @@ Matrices are represented as 1D arrays in row-major order.
 #include <iomanip>
 #include <array>
 #include <algorithm>
+#include <cstring>
 
 using namespace std;
 
@@ -82,12 +83,10 @@ void matrix_mult(T * mat1, T * mat2, GLuint ssboResult, unsigned int height_left
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(height_left, width_right, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
 
     glDeleteBuffers(1, &ssboMat1);
     glDeleteBuffers(1, &ssboMat2);
@@ -132,12 +131,10 @@ void matrix_mult(T* mat1, GLuint mat2Ssbo, GLuint ssboResult, unsigned int heigh
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(height_left, width_right, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
 
     glDeleteBuffers(1, &ssboMat1);
     glDeleteProgram(program);
@@ -184,12 +181,10 @@ void matrix_add(T* mat1, T* mat2, GLuint ssboResult, unsigned int width, unsigne
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(height, width, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
 
     glDeleteBuffers(1, &ssboMat1);
     glDeleteBuffers(1, &ssboMat2);
@@ -238,12 +233,10 @@ void matrix_add_constant_vec(T* mat, T* vec, GLuint ssboResult, unsigned int wid
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(height, width, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
 
     glDeleteBuffers(1, &matSsbo);
     glDeleteBuffers(1, &vecSsbo);
@@ -291,12 +284,10 @@ void matrix_add_constant_vec(GLuint matSsbo, T* vec, GLuint ssboResult, unsigned
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(height, width, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
 
     glDeleteBuffers(1, &vecSsbo);
     glDeleteProgram(program);
@@ -338,12 +329,10 @@ void sigmoid_activation(T* input, GLuint ssboResult, unsigned int vectorSize, un
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(sampleSize, vectorSize, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
 
     glDeleteBuffers(1, &ssboInput);
     glDeleteProgram(program);
@@ -378,12 +367,78 @@ void sigmoid_activation(GLuint inputSsbo, GLuint ssboResult, unsigned int vector
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(sampleSize, vectorSize, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
+
+    glDeleteProgram(program);
+}
+
+template <typename T>
+void ReLu_activation(GLuint inputSsbo, GLuint ssboResult, unsigned int vectorSize, unsigned int sampleSize) {
+
+    // --- Buffers ---
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, inputSsbo);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * vectorSize * sampleSize, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/ReLu_activation_float.comp");
+    }
+    else {
+        cerr << "sigmoid_activation: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%VS%", vectorSize);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    glDispatchCompute(sampleSize, vectorSize, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    glDeleteProgram(program);
+}
+
+template <typename T>
+void softmax_activation(GLuint inputSsbo, GLuint ssboResult, unsigned int vectorSize, unsigned int sampleSize) {
+
+    // --- Buffers ---
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, inputSsbo);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(T) * vectorSize * sampleSize, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/softmax_activation_float.comp");
+    }
+    else {
+        cerr << "softmax_activation: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%VS%", vectorSize);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    glDispatchCompute(sampleSize, vectorSize, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glDeleteProgram(program);
 }
@@ -419,7 +474,7 @@ void calculate_dC_dZL_BCE_sigmoid(float* A_L, float* Y, GLuint ssboResult, unsig
         src = loadShaderSource("shaders/calculate_dC_dZ_BCE_sigmoid_float.comp");
     }
     else {
-        cerr << "sigmoid_activation: unsupported type" << endl;
+        cerr << "calculate_dC_dZ_BCE_sigmoid: unsupported type" << endl;
         exit(-1);
     }
     assign_variable<GLuint>(src, "%VS%", vectorSize);
@@ -429,12 +484,61 @@ void calculate_dC_dZL_BCE_sigmoid(float* A_L, float* Y, GLuint ssboResult, unsig
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(sampleSize, vectorSize, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
+
+    glDeleteBuffers(1, &ssboA);
+    glDeleteBuffers(1, &ssboY);
+    glDeleteProgram(program);
+}
+
+template <typename T>
+void calculate_dC_dZL_CCE_softmax(float* A_L, float* Y, GLuint ssboResult, unsigned int vectorSize, unsigned int sampleSize) {
+    // dC_dZ for binary cross-entropy loss with sigmoid activation
+
+    // --- Buffers ---
+    GLuint ssboA, ssboY;
+    glGenBuffers(1, &ssboA);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboA);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, A_L, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssboA);
+
+    glGenBuffers(1, &ssboY);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboY);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, Y, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssboY);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * vectorSize * sampleSize, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        cerr << "calculate_dC_dZ_CCE_softmax: unsupported type" << endl;
+        exit(-1);
+        //src = loadShaderSource("shaders/calculate_dC_dZ_BCE_sigmoid_double.comp");
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/calculate_dC_dZ_CCE_softmax_float.comp");
+    }
+    else {
+        cerr << "calculate_dC_dZ_CCE_softmax: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%VS%", vectorSize);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    glDispatchCompute(sampleSize, vectorSize, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glDeleteBuffers(1, &ssboA);
     glDeleteBuffers(1, &ssboY);
@@ -475,12 +579,10 @@ void calculate_dC_dWl(GLuint dC_dZl_ssbo, GLuint Al_previous_ssbo, GLuint ssboRe
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(neurons, previousNeurons, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
 
     glDeleteProgram(program);
 }
@@ -515,12 +617,10 @@ void calculate_dC_dbl(GLuint ssboInput, GLuint ssboResult, unsigned int vectorSi
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(vectorSize, 1, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
 
     glDeleteProgram(program);
 }
@@ -562,12 +662,10 @@ void update_parameters(T* weights, GLuint dC_dWl_ssbo, GLuint ssboResult, unsign
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(neurons, previous_neurons, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
 
     glDeleteBuffers(1, &ssboW);
     glDeleteProgram(program);
@@ -575,7 +673,7 @@ void update_parameters(T* weights, GLuint dC_dWl_ssbo, GLuint ssboResult, unsign
 
 
 template <typename T>
-void calculate_dC_dZl_previous(GLuint dC_dZl_ssbo, GLuint A_previous_ssbo, GLuint Wl_ssbo, GLuint ssboResult, unsigned int neurons, unsigned int previousNeurons, unsigned int sampleSize) {
+void calculate_dC_dZl_previous_sigmoid(GLuint dC_dZl_ssbo, GLuint A_previous_ssbo, GLuint Wl_ssbo, GLuint ssboResult, unsigned int neurons, unsigned int previousNeurons, unsigned int sampleSize) {
 
     // --- Buffers ---
 
@@ -594,7 +692,7 @@ void calculate_dC_dZl_previous(GLuint dC_dZl_ssbo, GLuint A_previous_ssbo, GLuin
         exit(-1);
     }
     else if (is_same<T, GLfloat>::value) {
-        src = loadShaderSource("shaders/calculate_dC_dZl_previous_float.comp");
+        src = loadShaderSource("shaders/calculate_dC_dZl_previous_sigmoid_float.comp");
     }
     else {
         cerr << "calculate_dC_dZl_previous: unsupported type" << endl;
@@ -608,12 +706,52 @@ void calculate_dC_dZl_previous(GLuint dC_dZl_ssbo, GLuint A_previous_ssbo, GLuin
     glUseProgram(program);
 
     // --- Dispatch ---
-    auto start = std::chrono::steady_clock::now();
     glDispatchCompute(sampleSize, previousNeurons, 1);
 
     // --- Synchronize ---
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    auto end = std::chrono::steady_clock::now();
+
+    glDeleteProgram(program);
+}
+
+template <typename T>
+void calculate_dC_dZl_previous_ReLu(GLuint dC_dZl_ssbo, GLuint A_previous_ssbo, GLuint Wl_ssbo, GLuint ssboResult, unsigned int neurons, unsigned int previousNeurons, unsigned int sampleSize) {
+
+    // --- Buffers ---
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, dC_dZl_ssbo);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, A_previous_ssbo);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, Wl_ssbo);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboResult);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * sampleSize * previousNeurons, nullptr, GL_DYNAMIC_READ);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssboResult);
+
+    // --- Shader ---
+    string src;
+    if (is_same<T, GLdouble>::value) {
+        cerr << "calculate_dC_dZl_previous: unsupported type" << endl;
+        exit(-1);
+    }
+    else if (is_same<T, GLfloat>::value) {
+        src = loadShaderSource("shaders/calculate_dC_dZl_previous_ReLu_float.comp");
+    }
+    else {
+        cerr << "calculate_dC_dZl_previous: unsupported type" << endl;
+        exit(-1);
+    }
+    assign_variable<GLuint>(src, "%N%", neurons);
+    assign_variable<GLuint>(src, "%PN%", previousNeurons);
+    assign_variable<GLuint>(src, "%SS%", sampleSize);
+
+    GLuint program = compileComputeShader(src);
+    glUseProgram(program);
+
+    // --- Dispatch ---
+    glDispatchCompute(sampleSize, previousNeurons, 1);
+
+    // --- Synchronize ---
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glDeleteProgram(program);
 }

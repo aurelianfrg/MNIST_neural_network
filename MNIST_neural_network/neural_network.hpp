@@ -4,17 +4,28 @@
 #include <vector>
 #include <algorithm>
 #include <math.h>
+#include <cfloat>
 
 #include "gpu_matrix_op.hpp"
 
 using namespace std;
 
+enum ACTIVATION {
+	SIGMOID,
+	RELU
+};
+
+enum OUTPUT_AND_LOSS {
+	SIGMOID_BCE,
+	SOFTMAX_CCE
+};
+
 template <typename parameters_t>
 class NeuralNetwork {
 	// represents a neural network constituted of layers
 
-	template <typename parameters_t>
-	friend ostream& operator <<(ostream& os, const NeuralNetwork<parameters_t>& nn);
+	template <typename _parameters_t>
+	friend ostream& operator <<(ostream& os, const NeuralNetwork<_parameters_t>& nn);
 
 protected:
 	unsigned int layersNumber;					//nb of layers
@@ -24,50 +35,32 @@ protected:
 	unsigned int inputSize;						//size of the input layer (number of inputs)
 
 	vector<GLuint> cachedLayersOutputsSsbos;	//cached outputs of each layer (state of every neuron) to be used during backpropagation
+	vector<GLuint> cachedTrainingDataSsbos;
+	vector<GLuint> cachedTrainingLabelsSsbos;
 	GLuint cachedTrainingDataSsbo;
 	GLuint cachedTrainingLabelsSsbo;
 
-	bool verbose = false;								//whether to print debug information during feedforward and backpropagation
+	bool verbose = false;						//whether to print debug information during feedforward and backpropagation
 	parameters_t lastCost;
-	bool costIncreased = false;							//used to print a warning at the end of training to warn that the learning rate might be too high
-	unsigned int trainingEpochs;			//keeping track of training epochs
+	bool costIncreased = false;					//used to print a warning at the end of training to warn that the learning rate might be too high
+	unsigned int trainingEpochs;				//keeping track of training epochs
 	bool trainingDataIsCached = false;
 
+	unsigned int activation;					// activation function
+	unsigned int output_and_loss;				// activation function
 
-
-	void random_init(int seed) {
-		//initialize weights and bias with random values between -1 and 1
-
-		srand(seed);
-
-		for (int neuron_rank = 0; neuron_rank < inputSize * neuronsPerLayer.at(0); ++neuron_rank) {
-			parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
-			layersWeights[0][neuron_rank] = rand_value;
-		}
-		for (int i = 1; i < layersNumber; ++i) { // fill each layer
-			for (int neuron_rank = 0; neuron_rank < neuronsPerLayer.at(i - 1) * neuronsPerLayer.at(i); ++neuron_rank) {
-				parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
-				layersWeights[i][neuron_rank] = rand_value;
-			}
-		}
-
-		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
-			for (int neuron_rank = 0; neuron_rank < neuronsPerLayer.at(i); ++neuron_rank) {
-				parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
-				layersBias[i][neuron_rank] = rand_value;
-			}
-		}
-	}
 
 
 public:
-	NeuralNetwork(unsigned int layersNumber, vector<unsigned int> neurons, unsigned int inputSize) : 
-		layersNumber(layersNumber), 
+	NeuralNetwork(unsigned int layersNumber, vector<unsigned int> neurons, unsigned int inputSize, unsigned int activation_function = ACTIVATION::SIGMOID, unsigned int output_and_loss_functions = OUTPUT_AND_LOSS::SIGMOID_BCE) :
+		layersNumber(layersNumber),
 		neuronsPerLayer(neurons),
-		inputSize(inputSize)
+		inputSize(inputSize),
+		activation(activation_function),
+		output_and_loss(output_and_loss_functions)
 	{
 
-		if (layersNumber != neuronsPerLayer.size() ) {
+		if (layersNumber != neuronsPerLayer.size()) {
 			throw invalid_argument("layersNumber must be equal to the size of widths and heights vectors");
 		}
 		layersBias.resize(layersNumber);
@@ -77,7 +70,7 @@ public:
 		//allocating weights layers and bias layers with corresponding sizes
 		layersWeights.at(0) = new parameters_t[inputSize * neurons.at(0)]; // one weight per connection between input and first layer
 		for (int i = 1; i < layersNumber; ++i) {
-			layersWeights.at(i) = new parameters_t[neurons.at(i-1) * neurons.at(i)]; // one weight per connection between neurons of layer l-1 and l
+			layersWeights.at(i) = new parameters_t[neurons.at(i - 1) * neurons.at(i)]; // one weight per connection between neurons of layer l-1 and l
 		}
 		for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
 			layersBias.at(i) = new parameters_t[neurons.at(i)]; // one bias per neuron
@@ -97,8 +90,6 @@ public:
 		lastCost = FLT_MAX;
 		costIncreased = false;
 		trainingEpochs = 0;
-		glGenBuffers(1, &cachedTrainingDataSsbo);
-		glGenBuffers(1, &cachedTrainingLabelsSsbo);
 	}
 
 
@@ -123,8 +114,12 @@ public:
 	}
 
 
-	NeuralNetwork(const string& filename) {
-	//initialize a NeuralNetwork with a file containing a saved state
+	NeuralNetwork(const string& filename, unsigned int activation_function = ACTIVATION::SIGMOID, unsigned int output_and_loss_functions = OUTPUT_AND_LOSS::SIGMOID_BCE) :
+		activation(activation_function),
+		output_and_loss(output_and_loss_functions) 
+	{
+		//initialize a NeuralNetwork with a file containing a saved state
+		this->activation = activation_function;
 
 		ifstream ifs(filename, ios::binary);
 		if (!ifs) {
@@ -143,9 +138,9 @@ public:
 		this->layersNumber = fileLayersNumber;
 		this->layersBias.resize(layersNumber);
 		this->layersWeights.resize(layersNumber);
-		this->cachedLayersOutputsSsbos.resize(layersNumber); 
+		this->cachedLayersOutputsSsbos.resize(layersNumber);
 		this->neuronsPerLayer.resize(layersNumber);
-		
+
 		// reading inputSize
 		unsigned int fileInputSize;
 		ifs.read((char*)&fileInputSize, sizeof(fileInputSize));
@@ -186,7 +181,7 @@ public:
 		ifs.close();
 
 		// set the remainder attributes to default values
-		
+
 		//create as many ssbo as layers to cache the outputs of each layer
 		for (int i = 0; i < layersNumber; ++i) {
 			GLuint ssbo;
@@ -196,10 +191,89 @@ public:
 		verbose = false;
 		lastCost = FLT_MAX;
 		costIncreased = false;
-		glGenBuffers(1, &cachedTrainingDataSsbo);
-		glGenBuffers(1, &cachedTrainingLabelsSsbo);
 	}
 
+
+
+	void random_init(int seed) {
+		srand(seed);
+
+		if (activation == ACTIVATION::RELU) {
+
+			// Box-Muller normal generator
+			auto rand_normal = [&]() -> double {
+				static bool hasSpare = false;
+				static double spare;
+				if (hasSpare) {
+					hasSpare = false;
+					return spare;
+				}
+				hasSpare = true;
+				double u, v, s;
+				do {
+					u = 2.0 * (double)rand() / RAND_MAX - 1.0;
+					v = 2.0 * (double)rand() / RAND_MAX - 1.0;
+					s = u * u + v * v;
+				} while (s >= 1.0 || s == 0.0);
+				double mul = std::sqrt(-2.0 * std::log(s) / s);
+				spare = v * mul;
+				return u * mul;
+				};
+
+			auto rand_uniform = [&](double a, double b) -> double {
+				return a + (b - a) * (double(rand()) / RAND_MAX);
+				};
+
+			// layer 0 (input -> first hidden)
+			{
+				double fan_in = static_cast<double>(inputSize);
+				double fan_out = static_cast<double>(neuronsPerLayer.at(0));
+				double stddev = std::sqrt(2.0 / fan_in); // He normal
+				for (int i = 0; i < inputSize * neuronsPerLayer.at(0); ++i) {
+					layersWeights[0][i] = static_cast<parameters_t>(rand_normal() * stddev);
+				}
+
+			}
+
+			// hidden layers
+			for (int l = 1; l < layersNumber; ++l) {
+				double fan_in = static_cast<double>(neuronsPerLayer.at(l - 1));
+				double fan_out = static_cast<double>(neuronsPerLayer.at(l));
+				double stddev = std::sqrt(2.0 / fan_in); // He normal
+				for (int i = 0; i < static_cast<int>(fan_in * fan_out); ++i) {
+					layersWeights[l][i] = static_cast<parameters_t>(rand_normal() * stddev);
+				}
+
+			}
+
+			// biases = 0
+			for (int i = 1; i < layersNumber; ++i) {
+				for (int j = 0; j < static_cast<int>(neuronsPerLayer.at(i)); ++j) {
+					layersBias[i][j] = static_cast<parameters_t>(0);
+				}
+			}
+		}
+		else {
+
+			for (int neuron_rank = 0; neuron_rank < inputSize * neuronsPerLayer.at(0); ++neuron_rank) {
+				parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
+				layersWeights[0][neuron_rank] = rand_value;
+			}
+			for (int i = 1; i < layersNumber; ++i) { // fill each layer
+				for (int neuron_rank = 0; neuron_rank < neuronsPerLayer.at(i - 1) * neuronsPerLayer.at(i); ++neuron_rank) {
+					parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
+					layersWeights[i][neuron_rank] = rand_value;
+				}
+			}
+
+			for (int i = 1; i < layersNumber; ++i) { // input layer has no bias
+				for (int neuron_rank = 0; neuron_rank < neuronsPerLayer.at(i); ++neuron_rank) {
+					parameters_t rand_value = 2.0 * (parameters_t(rand()) / RAND_MAX) - 1.0;
+					layersBias[i][neuron_rank] = rand_value;
+				}
+			}
+		}
+	}
 
 	void setVerbose(bool v) {
 		this->verbose = v;
@@ -211,10 +285,10 @@ public:
 		unsigned int sampleSize,	// number of inputs (number of columns of the input matrix)
 		unsigned int vectorSize)	// size of each input (number of rows of the input matrix)
 	{
-	// feed forward the input through the neural network and return the output of the last layer
+		// feed forward the input through the neural network and return the output of the last layer
 
-		// input dimension must match the input layer dimension
-		if ( vectorSize != inputSize) {
+			// input dimension must match the input layer dimension
+		if (vectorSize != inputSize) {
 			throw invalid_argument("incorrect input dimensions");
 		}
 
@@ -229,7 +303,7 @@ public:
 		else {
 			matrix_mult<parameters_t>(layersWeights[0], input, ssboWeighted, neuronsPerLayer.at(0), inputSize, sampleSize);
 		}
-		
+
 		if (verbose) {
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
 			parameters_t* weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
@@ -239,7 +313,15 @@ public:
 		}
 
 		//apply activation to input
-		sigmoid_activation<parameters_t>(ssboWeighted, cachedLayersOutputsSsbos.at(0), neuronsPerLayer.at(0), sampleSize);
+		if (activation == ACTIVATION::SIGMOID) {
+			sigmoid_activation<parameters_t>(ssboWeighted, cachedLayersOutputsSsbos.at(0), neuronsPerLayer.at(0), sampleSize);
+		}
+		else if (activation == ACTIVATION::RELU) {
+			ReLu_activation<parameters_t>(ssboWeighted, cachedLayersOutputsSsbos.at(0), neuronsPerLayer.at(0), sampleSize);
+		}
+		else {
+			throw domain_error("Unknown activation function.");
+		}
 
 		if (verbose) {
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(0));
@@ -250,33 +332,42 @@ public:
 		}
 
 		// feed forward through the layers
-		for (int layer = 1; layer < layersNumber; ++layer) {
+		for (int layer = 1; layer < layersNumber-1; ++layer) {
 
 			// apply weights to input
-			matrix_mult<parameters_t>(layersWeights[layer], cachedLayersOutputsSsbos.at(layer-1), ssboWeighted, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer-1), sampleSize);
-			
+			matrix_mult<parameters_t>(layersWeights[layer], cachedLayersOutputsSsbos.at(layer - 1), ssboWeighted, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer - 1), sampleSize);
+
 			if (verbose) {
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
 				parameters_t* weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 				glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 				cout << "After weights multiplication:" << endl;
 				printMatrix<parameters_t>(weighted, sampleSize, neuronsPerLayer.at(layer));
-				
+
 			}
 
 			// add bias
 			matrix_add_constant_vec<parameters_t>(ssboWeighted, layersBias[layer], ssboBiased, sampleSize, neuronsPerLayer.at(layer));
-			
+
 			if (verbose) {
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboBiased);
 				parameters_t* biased = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 				glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 				cout << "After bias addition:" << endl;
-				printMatrix<parameters_t>(biased, sampleSize, neuronsPerLayer.at(layer));	
+				printMatrix<parameters_t>(biased, sampleSize, neuronsPerLayer.at(layer));
 			}
 
 			//apply activation to input
-			sigmoid_activation<parameters_t>(ssboBiased, cachedLayersOutputsSsbos.at(layer), neuronsPerLayer.at(layer), sampleSize);
+			
+			if (activation == ACTIVATION::SIGMOID) {
+				sigmoid_activation<parameters_t>(ssboBiased, cachedLayersOutputsSsbos.at(layer), neuronsPerLayer.at(layer), sampleSize);
+			}
+			else if (activation == ACTIVATION::RELU) {
+				ReLu_activation<parameters_t>(ssboBiased, cachedLayersOutputsSsbos.at(layer), neuronsPerLayer.at(layer), sampleSize);
+			}
+			else {
+				throw domain_error("Unknown activation function.");
+			}
 
 			if (verbose) {
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(layer));
@@ -284,12 +375,46 @@ public:
 				glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 				cout << "After activation:" << endl;
 				printMatrix<parameters_t>(activated, sampleSize, neuronsPerLayer.at(layer));
-				
+
 			}
 		}
 
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(layersNumber-1));
+		// for the last layer, apply the specific activation for the output layer
+		matrix_mult<parameters_t>(layersWeights[layersNumber - 1], cachedLayersOutputsSsbos.at(layersNumber - 2), ssboWeighted, neuronsPerLayer.at(layersNumber - 1), neuronsPerLayer.at(layersNumber - 2), sampleSize);
+		if (verbose) {
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboWeighted);
+			parameters_t* weighted = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+			cout << "After weights multiplication:" << endl;
+			printMatrix<parameters_t>(weighted, sampleSize, neuronsPerLayer.at(layersNumber - 1));
+
+		}
+		matrix_add_constant_vec<parameters_t>(ssboWeighted, layersBias[layersNumber - 1], ssboBiased, sampleSize, neuronsPerLayer.at(layersNumber - 1));
+		if (verbose) {
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssboBiased);
+			parameters_t* biased = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+			cout << "After bias addition:" << endl;
+			printMatrix<parameters_t>(biased, sampleSize, neuronsPerLayer.at(layersNumber - 1));
+		}
+
+		if (output_and_loss == OUTPUT_AND_LOSS::SIGMOID_BCE) {
+			sigmoid_activation<parameters_t>(ssboBiased, cachedLayersOutputsSsbos.at(layersNumber - 1), neuronsPerLayer.at(layersNumber - 1), sampleSize);
+		}
+		else if (output_and_loss == OUTPUT_AND_LOSS::SOFTMAX_CCE) {
+			softmax_activation<parameters_t>(ssboBiased, cachedLayersOutputsSsbos.at(layersNumber - 1), neuronsPerLayer.at(layersNumber - 1), sampleSize);
+		}
+		else {
+			throw domain_error("Unknown output and loss functions.");
+		}
+
+
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cachedLayersOutputsSsbos.at(layersNumber - 1));
 		parameters_t* activated = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+
+		/*cout << "Output:" << endl;
+		printMatrix<parameters_t>(activated, sampleSize, neuronsPerLayer.at(layersNumber - 1));*/
+
 
 		// there are "sampleSize" outputs (= as many as inputs) and they are of the same size as the number of neurons in the last layer
 		vector<parameters_t> output(sampleSize * neuronsPerLayer.back());
@@ -304,21 +429,33 @@ public:
 	}
 
 	parameters_t loss(parameters_t* predicted, parameters_t* expected, unsigned int inputsStride) {
-	// binary cross-entropy loss function
-	// input vectors are expected to be of the same size as the output layer
+		// binary cross-entropy loss function
+		// input vectors are expected to be of the same size as the output layer
 		int vectorSize = neuronsPerLayer.back();
 		const float epsilon = 1e-10; // small value to avoid log(0)
 		parameters_t totalLoss = 0.0;
 
-		for (int i = 0; i < vectorSize; ++i) {
-			parameters_t singleOutputLoss = -(expected[i* inputsStride] * log(predicted[i* inputsStride] + epsilon) + (1 - expected[i* inputsStride]) * log(1 - predicted[i* inputsStride] + epsilon));
-			totalLoss += singleOutputLoss;
+		if (output_and_loss == OUTPUT_AND_LOSS::SIGMOID_BCE) {
+			for (int i = 0; i < vectorSize; ++i) {
+				parameters_t singleOutputLoss = -(expected[i * inputsStride] * log(predicted[i * inputsStride] + epsilon) + (1 - expected[i * inputsStride]) * log(1 - predicted[i * inputsStride] + epsilon));
+				totalLoss += singleOutputLoss;
+			}
 		}
-		return totalLoss / vectorSize; 
+		else if (output_and_loss == OUTPUT_AND_LOSS::SOFTMAX_CCE) {
+			for (int i = 0; i < vectorSize; ++i) {
+				parameters_t singleOutputLoss = -(expected[i * inputsStride] * log(predicted[i * inputsStride] + epsilon));
+				totalLoss += singleOutputLoss;
+			}
+		}
+		else {
+			throw domain_error("Unknown output and loss functions.");
+		}
+		
+		return totalLoss / vectorSize;
 	}
 
 	parameters_t cost(parameters_t* predicted, parameters_t* expected, unsigned int inputsNumber) {
-		parameters_t totalCost = 0.0;	
+		parameters_t totalCost = 0.0;
 
 		// output and expected are matrices with one column per input
 		// this means that the values for input input_rank start at index input_rank and are spaced by inputsNumber
@@ -332,9 +469,9 @@ public:
 	}
 
 	void backPropagation(
-		parameters_t* expected, 
-		parameters_t* input, 
-		unsigned int inputsNumber, 
+		parameters_t* expected,
+		parameters_t* input,
+		unsigned int inputsNumber,
 		parameters_t learningRate
 	) {
 
@@ -351,7 +488,7 @@ public:
 		}
 
 		parameters_t cost = this->cost(A_L, expected, inputsNumber);
-		cout << "Cost: " << std::fixed << std::setprecision(3) << cost << endl; // print cost to monitor training
+		cout << "Cost: " << std::fixed << std::setprecision(3) << cost << " "; // print cost to monitor training
 
 		if (cost > this->lastCost) {
 			this->costIncreased = true;
@@ -364,11 +501,22 @@ public:
 		// calculate dC_dZ(L) to start backpropagation from the last layer
 		GLuint dC_dZ_ssbo;
 		glGenBuffers(1, &dC_dZ_ssbo);
-		calculate_dC_dZL_BCE_sigmoid<parameters_t>(A_L, expected, dC_dZ_ssbo, outputSize, inputsNumber);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dZ_ssbo);
-		parameters_t* dC_dZ_L = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+
+		if (output_and_loss == OUTPUT_AND_LOSS::SIGMOID_BCE) {
+			calculate_dC_dZL_BCE_sigmoid<parameters_t>(A_L, expected, dC_dZ_ssbo, outputSize, inputsNumber);
+		}
+		else if (output_and_loss == OUTPUT_AND_LOSS::SOFTMAX_CCE) {
+			calculate_dC_dZL_CCE_softmax<parameters_t>(A_L, expected, dC_dZ_ssbo, outputSize, inputsNumber);
+		}
+		else {
+			throw domain_error("Unknown output and loss functions.");
+		}
+		
+		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 
 		if (verbose) {
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dZ_ssbo);
+			parameters_t* dC_dZ_L = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 			cout << "dC_dZ_L:" << endl;
 			printMatrix<parameters_t>(dC_dZ_L, outputSize, inputsNumber);
 		}
@@ -385,20 +533,20 @@ public:
 			}
 
 			// --- calculate dc_dW(l) and dC_db(l) ---
-			calculate_dC_dWl<parameters_t>(dC_dZ_ssbo, cachedLayersOutputsSsbos.at(layer-1), dC_dW_ssbo, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer-1), inputsNumber);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dW_ssbo);
-			parameters_t* dC_dW = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+			calculate_dC_dWl<parameters_t>(dC_dZ_ssbo, cachedLayersOutputsSsbos.at(layer - 1), dC_dW_ssbo, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer - 1), inputsNumber);
 
 			if (verbose) {
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dW_ssbo);
+				parameters_t* dC_dW = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 				cout << "dC_dW:" << endl;
 				printMatrix<parameters_t>(dC_dW, neuronsPerLayer.at(layer - 1), neuronsPerLayer.at(layer));
 			}
 
 			calculate_dC_dbl<parameters_t>(dC_dZ_ssbo, dC_db_ssbo, neuronsPerLayer.at(layer), inputsNumber);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_db_ssbo);
-			parameters_t* dC_db = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
-
+			
 			if (verbose) {
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_db_ssbo);
+				parameters_t* dC_db = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 				cout << "dC_db:" << endl;
 				printMatrix<parameters_t>(dC_db, 1, neuronsPerLayer.at(layer));
 			}
@@ -414,6 +562,7 @@ public:
 			}
 			// copy updated weights back to the neural network
 			copy(updatedWeights, updatedWeights + neuronsPerLayer.at(layer - 1) * neuronsPerLayer.at(layer), layersWeights[layer]);
+			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 
 			update_parameters<parameters_t>(layersBias[layer], dC_db_ssbo, b_ssbo, 1, neuronsPerLayer.at(layer), learningRate);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, b_ssbo);
@@ -424,15 +573,25 @@ public:
 				printMatrix<parameters_t>(updatedBias, 1, neuronsPerLayer.at(layer));
 			}
 			copy(updatedBias, updatedBias + neuronsPerLayer.at(layer), layersBias[layer]);
-			
+			glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+
 			// --- calculate dC_dZ(l-1) to continue backpropagation ---
 			GLuint dC_dZ_previous_ssbo;
 			glGenBuffers(1, &dC_dZ_previous_ssbo);
-			calculate_dC_dZl_previous<parameters_t>(dC_dZ_ssbo, cachedLayersOutputsSsbos.at(layer - 1), W_ssbo, dC_dZ_previous_ssbo, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer - 1), inputsNumber);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dZ_previous_ssbo);
-			parameters_t* dC_dZ_previous = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 
+			if (activation == ACTIVATION::SIGMOID) {
+				calculate_dC_dZl_previous_sigmoid<parameters_t>(dC_dZ_ssbo, cachedLayersOutputsSsbos.at(layer - 1), W_ssbo, dC_dZ_previous_ssbo, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer - 1), inputsNumber);
+			}
+			else if (activation == ACTIVATION::RELU) {
+				calculate_dC_dZl_previous_ReLu<parameters_t>(dC_dZ_ssbo, cachedLayersOutputsSsbos.at(layer - 1), W_ssbo, dC_dZ_previous_ssbo, neuronsPerLayer.at(layer), neuronsPerLayer.at(layer - 1), inputsNumber);
+			}
+			else {
+				throw domain_error("Unknown activation function.");
+			}
+			
 			if (verbose) {
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dZ_previous_ssbo);
+				parameters_t* dC_dZ_previous = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 				cout << "dC_dZ_previous :" << endl;
 				printMatrix<parameters_t>(dC_dZ_previous, neuronsPerLayer.at(layer - 1), inputsNumber);
 			}
@@ -440,7 +599,7 @@ public:
 			glDeleteBuffers(1, &dC_dZ_ssbo);
 			dC_dZ_ssbo = dC_dZ_previous_ssbo;
 
-		}		
+		}
 		// handle the input layer separately to update weights only (no bias), with input as previous layer output
 
 		GLuint ssbo_input;
@@ -448,10 +607,10 @@ public:
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_input);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(parameters_t) * inputSize * inputsNumber, input, GL_DYNAMIC_DRAW);
 		calculate_dC_dWl<parameters_t>(dC_dZ_ssbo, ssbo_input, dC_dW_ssbo, neuronsPerLayer.at(0), inputSize, inputsNumber);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dW_ssbo);
-		parameters_t* dC_dW = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
-
+		
 		if (verbose) {
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, dC_dW_ssbo);
+			parameters_t* dC_dW = (parameters_t*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
 			cout << "dC_dW (input layer):" << endl;
 			printMatrix<parameters_t>(dC_dW, inputSize, neuronsPerLayer.at(0));
 		}
@@ -466,6 +625,7 @@ public:
 		}
 
 		copy(updatedWeights, updatedWeights + inputSize * neuronsPerLayer.at(0), layersWeights[0]);
+		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 
 		glDeleteBuffers(1, &dC_dZ_ssbo);
 		glDeleteBuffers(1, &dC_dW_ssbo);
@@ -477,40 +637,55 @@ public:
 
 
 	void train(
-		parameters_t * training_set,	// contiguously allocated inputs for training (each must be of inputSize)
-		parameters_t * labels,			// contiguously allocated labels (each must match the size of the output layer)
-		unsigned int inputsNumber,		
+		vector<parameters_t*>* training_sets,		// contiguously allocated inputs for training (each must be of inputSize)
+		vector<parameters_t*>* labels,			// contiguously allocated labels (each must match the size of the output layer)
+		vector<unsigned int> inputsNumber,
 		unsigned int epochs,			// number of consecutive runs of feedForward then backPropagation
 		parameters_t learningRate
-	) 
+	)
 	{
 		if (!trainingDataIsCached) {
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->cachedTrainingDataSsbo);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, this->inputSize * inputsNumber * sizeof(parameters_t), training_set, GL_STATIC_DRAW);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->cachedTrainingLabelsSsbo);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, this->neuronsPerLayer.back() * inputsNumber * sizeof(parameters_t), labels, GL_STATIC_DRAW);
+			cachedTrainingDataSsbos.resize(training_sets->size());
+			cachedTrainingLabelsSsbos.resize(training_sets->size());
+			for (int tile = 0; tile < training_sets->size(); ++tile) {
+				glGenBuffers(1, &cachedTrainingDataSsbos.at(tile));
+				glGenBuffers(1, &cachedTrainingLabelsSsbos.at(tile));
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->cachedTrainingDataSsbos.at(tile));
+				glBufferData(GL_SHADER_STORAGE_BUFFER, this->inputSize * inputsNumber.at(tile) * sizeof(parameters_t), training_sets->at(tile), GL_STATIC_DRAW);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, this->cachedTrainingLabelsSsbos.at(tile));
+				glBufferData(GL_SHADER_STORAGE_BUFFER, this->neuronsPerLayer.back() * inputsNumber.at(tile) * sizeof(parameters_t), labels->at(tile), GL_STATIC_DRAW);
+			}
 			trainingDataIsCached = true;
 		}
 
 		for (int e = 0; e < epochs; ++e) {
-			cout << "epoch " << trainingEpochs << " --> ";
-			feedForward(training_set, inputsNumber, this->inputSize);
-			backPropagation(labels, training_set, inputsNumber, learningRate);
+			cout << "epoch " << trainingEpochs << " (lr " << fixed << setprecision(3) << learningRate << ") --> ";
+			for (int tile = 0; tile < training_sets->size(); ++tile) {
+				cachedTrainingDataSsbo = cachedTrainingDataSsbos.at(tile);
+				cachedTrainingLabelsSsbo = cachedTrainingLabelsSsbos.at(tile);
+				feedForward(training_sets->at(tile), inputsNumber.at(tile), this->inputSize);
+				backPropagation(labels->at(tile), training_sets->at(tile), inputsNumber.at(tile), learningRate);
+			}
 			++trainingEpochs;
+			cout << endl;
 		}
 		if (this->costIncreased) {
 			cout << endl << " !!! - Warning: cost increased at some point during training. Consider reducing the learning rate. - !!!" << endl;
 			this->costIncreased = false;
 		}
 
+		for (int tile = 0; tile < training_sets->size(); ++tile) {
+			glDeleteBuffers(1, &cachedTrainingDataSsbos.at(tile));
+			glDeleteBuffers(1, &cachedTrainingLabelsSsbos.at(tile));
+		}
 		trainingDataIsCached = false;
 	}
 
 
 	bool dumpParameters(string filename = string("auto")) {
-	// Dump Neural Network state as a binary file 
-		
-		// process filename
+		// Dump Neural Network state as a binary file 
+
+			// process filename
 		string selectedFilename;
 		if (filename.compare(string("auto")) == 0) {
 			selectedFilename = genAutoDumpFilename();
@@ -522,7 +697,7 @@ public:
 		// open output file
 		ofstream ofs(selectedFilename, ios::binary);
 		if (!ofs) {
-			cerr << "Error opening file for writing: " << filename << endl;
+			cerr << "Error opening file for writing: " << selectedFilename << endl;
 			return false;
 		}
 		clog << "Dumping NeuralNetwork state in file : " << selectedFilename << endl;
@@ -551,8 +726,17 @@ public:
 
 
 	string genAutoDumpFilename() {
-	// generate an automatic file name describing the parameters of a NeuralNetwork, such as layers number, input size and neurons count
+		// generate an automatic file name describing the parameters of a NeuralNetwork, such as layers number, input size and neurons count
 		stringstream ss;
+		ss << "nn_states/";
+
+		if (activation == ACTIVATION::SIGMOID) {
+			ss << "sigmoid/";
+		}
+		else if (activation == ACTIVATION::RELU) {
+			ss << "ReLu/";
+		}
+		
 		ss << "NeuralNetworkDumpFile" << "_l" << layersNumber << "_i" << inputSize;
 		for (unsigned int n : neuronsPerLayer) {
 			ss << "_" << n;
@@ -567,7 +751,7 @@ public:
 
 
 template <typename parameters_t>
-ostream & operator <<(ostream &os, const NeuralNetwork<parameters_t> & nn) {
+ostream& operator <<(ostream& os, const NeuralNetwork<parameters_t>& nn) {
 	//print the neural network weights and bias
 
 	os << "-----------------------------" << endl;

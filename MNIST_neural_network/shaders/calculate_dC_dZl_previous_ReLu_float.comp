@@ -29,8 +29,10 @@ void main() {
     uint previousNeuron = gl_GlobalInvocationID.y;
 
     float sum = 0.0;
-    for (int neuron = 0; neuron < neurons; ++neuron) {
-        sum += dC_dZl[neuron][sampleNumber] * Wl[neuron][previousNeuron];
+    for (uint neuron = 0u; neuron < neurons; ++neuron) {
+        if (A_previous[previousNeuron][sampleNumber] > 0.f) { // ReLu derivative is 0 for Z<0, i.e. A=0
+            sum += dC_dZl[neuron][sampleNumber] * Wl[neuron][previousNeuron];
+        }
     }
-    dC_dZ_previous[previousNeuron][sampleNumber] = sum * A_previous[previousNeuron][sampleNumber] * ( 1 - A_previous[previousNeuron][sampleNumber]);
+    dC_dZ_previous[previousNeuron][sampleNumber] = sum;
 }

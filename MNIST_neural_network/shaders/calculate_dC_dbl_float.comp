@@ -16,7 +16,7 @@ layout(std430, binding = 1) buffer Output {
 void main() {
     uint row = gl_GlobalInvocationID.x;
     float sum = 0.0;
-    for (int sampleNumber = 0; sampleNumber < sampleSize; ++sampleNumber) {
+    for (uint sampleNumber = 0u; sampleNumber < sampleSize; ++sampleNumber) {
         sum += dC_dZ[row][sampleNumber];
     }
     dC_db[row] = sum;

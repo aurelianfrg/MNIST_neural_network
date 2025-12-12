@@ -24,7 +24,7 @@ void main() {
     uint idy = gl_GlobalInvocationID.y;
 
     float sum = 0.0;
-    for (int i = 0; i < common_length; ++i){
+    for (uint i = 0u; i < common_length; ++i){
         sum += mat_1[idx][i] * mat_2[i][idy];
     }
     mat_out[idx][idy] = sum;

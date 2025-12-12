@@ -25,7 +25,7 @@ void main() {
     uint previousNeuron = gl_GlobalInvocationID.y;
 
     float sum = 0.0;
-    for (int sample_number = 0; sample_number < sampleSize; sample_number++) {
+    for (uint sample_number = 0u; sample_number < sampleSize; sample_number++) {
         sum += dC_dZl[neuron][sample_number] * Al_previous[previousNeuron][sample_number];
     }
     dC_dWl[neuron][previousNeuron] = sum;
